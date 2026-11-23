@@ -13,7 +13,7 @@ Campus errand relay: students hand small errands to students already going that 
 | Backend (Supabase: schema, ledger, RPCs, RLS, cron) | Built, 80 pgTAP tests passing |
 | Edge Functions (Paystack top-up, webhook, bank account, withdraw, push/email) | Built, typechecked, webhook + withdraw smoke-tested locally |
 | Student app (`apps/web`) | Built: Next.js 16 PWA, 25 canvas screens, lint + production build clean |
-| Admin dashboard | Next: Next.js |
+| Admin dashboard (`apps/admin`) | Built: Next.js 16, ID checks, disputes, flagged requests, jobs, students, places and rules, money, audit log |
 
 ## Run locally
 
@@ -26,7 +26,8 @@ supabase test db               # pgTAP tests
 cp supabase/functions/.env.example supabase/functions/.env
 supabase functions serve --env-file supabase/functions/.env
 
-cd apps/web && pnpm install && pnpm dev   # http://localhost:3000
+cd apps/web && pnpm install && pnpm dev     # student app, http://localhost:3000
+cd apps/admin && pnpm install && pnpm dev   # admin, http://localhost:3001 (admin@relay.test)
 ```
 
 Sign-up codes and reset links land in Mailpit: http://127.0.0.1:55324.
@@ -69,6 +70,12 @@ Seed logins (password `relay-test-123`): `admin@relay.test`, `aisha@relay.test` 
 | `bank-account` | GET bank list; POST resolves account name, must match verified name |
 | `withdraw` | Moves money to in-transit, starts Paystack transfer, reverses on refusal |
 | `dispatch-notification` | Push (FCM) + email (Resend) for each new notification row |
+
+## Admin dashboard (apps/admin)
+
+- Same stack and login as the student app; non-admins are signed out. Reads go through RLS (`is_admin()`), decisions through the admin RPCs, which write `admin_audit`.
+- Overview shows the PRD pilot metrics against their targets (`admin_metrics`) and ledger health (`admin_ledger_health`).
+- `components/ui.tsx`, `icons.tsx` and `lib/format.ts`, `errors.ts`, `database.types.ts` are copied from `apps/web`; move them to a shared package if they start to drift.
 
 ## Decisions made while building
 

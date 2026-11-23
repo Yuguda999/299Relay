@@ -1,0 +1,49 @@
+@import "tailwindcss";
+
+/* 299 RELAY tokens, from the screens canvas. */
+@theme {
+  --color-navy: #0b1f44;
+  --color-ink: #172033;
+  --color-bg: #f5f7fa;
+  --color-muted: #5b616b;
+  --color-line: #e1e5ec;
+  --color-field: #cdd3dd;
+  --color-soft: #e7ecf5;
+  --color-tab: #e6eaf0;
+  --color-mist: #c9d3e6;
+  --color-orange: #ff7a00;
+  --color-blue: #1f4e99;
+  --color-blue-soft: #e3eaf6;
+  --color-amber: #b54708;
+  --color-amber-soft: #fdefe3;
+  --color-danger: #b42318;
+  --color-danger-soft: #fee4e2;
+  --color-success: #067647;
+  --color-success-soft: #dcfae6;
+
+  --font-sans: var(--font-inter), system-ui, sans-serif;
+  --font-display: var(--font-montserrat), var(--font-inter), sans-serif;
+}
+
+html,
+body {
+  background: var(--color-bg);
+  color: var(--color-ink);
+}
+
+body {
+  font-family: var(--font-sans);
+  -webkit-tap-highlight-color: transparent;
+}
+
+input,
+select,
+textarea,
+button {
+  font: inherit;
+}
+
+:focus-visible {
+  outline: 2px solid var(--color-orange);
+  outline-offset: 2px;
+}

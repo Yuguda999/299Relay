@@ -1464,6 +1464,8 @@ export type Database = {
           isSetofReturn: false;
         };
       };
+      admin_ledger_health: { Args: Record<PropertyKey, never>; Returns: Json };
+      admin_metrics: { Args: { p_days?: number }; Returns: Json };
       admin_review_request: {
         Args: { p_approve: boolean; p_note?: string; p_request: string };
         Returns: {
@@ -1519,6 +1521,27 @@ export type Database = {
         SetofOptions: {
           from: "*";
           to: "profiles";
+          isOneToOne: true;
+          isSetofReturn: false;
+        };
+      };
+      admin_update_campus: {
+        Args: { p_curfew: string; p_item_cap_new: number; p_item_cap_trusted: number };
+        Returns: {
+          active: boolean;
+          created_at: string;
+          handoff_curfew: string;
+          id: string;
+          item_cap_new: number;
+          item_cap_trusted: number;
+          name: string;
+          short_name: string;
+          timezone: string;
+          updated_at: string;
+        };
+        SetofOptions: {
+          from: "*";
+          to: "campuses";
           isOneToOne: true;
           isSetofReturn: false;
         };
