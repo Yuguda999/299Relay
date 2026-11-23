@@ -4,19 +4,17 @@ import Link from "next/link";
 import { useSearchParams } from "next/navigation";
 import { Suspense, useState } from "react";
 import { PageTitle, Table } from "@/components/shell";
-import { Chip, Empty, Loading, Pill } from "@/components/ui";
+import { ChoiceChips, EmptyState, Loading, SearchInput, StatusChip, type ChipTone } from "@/components/ui";
 import { usePlaceName, useLoad } from "@/lib/admin";
 import { dayTime, JOB_STATUS_LABEL, naira, TYPE_LABEL } from "@/lib/format";
 import { supabase, type Enums } from "@/lib/supabase/client";
 
-const FILTERS: { value: string; label: string }[] = [
-  { value: "active", label: "Active" },
-  { value: "overdue", label: "Overdue" },
-  { value: "disputed", label: "Disputed" },
-  { value: "completed", label: "Completed" },
-  { value: "all", label: "All" },
+const FILTERS = [
+  { value: "active", label: "Active" }, { value: "overdue", label: "Overdue" }, { value: "disputed", label: "Disputed" },
+  { value: "completed", label: "Completed" }, { value: "all", label: "All" },
 ];
 const ACTIVE: Enums<"job_status">[] = ["accepted", "purchased", "in_transit"];
+const TONE: Record<string, ChipTone> = { completed: "ok", disputed: "critical", accepted: "live", purchased: "live", in_transit: "live" };
 
 export default function JobsPage() {
   return <Suspense fallback={<Loading />}><Jobs /></Suspense>;
@@ -25,6 +23,7 @@ export default function JobsPage() {
 function Jobs() {
   const params = useSearchParams();
   const [filter, setFilter] = useState(params.get("filter") ?? "active");
+  const [search, setSearch] = useState("");
   const place = usePlaceName();
 
   const q = useLoad(async () => {
@@ -35,37 +34,41 @@ function Jobs() {
     if (filter === "disputed") query = query.eq("status", "disputed");
     if (filter === "completed") query = query.eq("status", "completed");
     const { data } = await query;
-    let rows = data ?? [];
     const now = Date.now();
+    let rows = data ?? [];
     if (filter === "overdue") rows = rows.filter((j) => new Date(j.request!.deadline).getTime() < now - 2 * 36e5);
     return { rows, now };
   }, [filter]);
 
+  const s = search.trim().toLowerCase();
+  const rows = (q.data?.rows ?? []).filter((j) => !s || [j.request?.items_text, j.requester?.full_name, j.traveler?.full_name].some((x) => x?.toLowerCase().includes(s)));
+
   return (
     <>
       <PageTitle title="Jobs" sub="Newest first, up to 200." />
-      <div className="flex flex-wrap gap-2">
-        {FILTERS.map((f) => <Chip key={f.value} on={filter === f.value} onClick={() => setFilter(f.value)}>{f.label}</Chip>)}
+      <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
+        <ChoiceChips aria-label="Filter" value={filter} onChange={setFilter} options={FILTERS} />
+        <SearchInput value={search} onChange={setSearch} placeholder="Search items or names" shortcut className="md:w-80" />
       </div>
-      {q.loading ? <Loading /> : q.data?.rows.length ? (
-        <Table head={["Job", "Type", "Route", "Deadline", "Requester → traveler", "Fee", "Status"]}>
-          {q.data.rows.map((j) => {
+      {q.loading || !q.data ? <Loading /> : rows.length ? (
+        <Table head={["Job", "Type", "Route", "Deadline", "Requester → traveler", "Fee", "Status"]} minWidth={900}>
+          {rows.map((j) => {
             const r = j.request!;
             const late = ACTIVE.includes(j.status) && new Date(r.deadline).getTime() < q.data!.now;
             return (
-              <tr key={j.id} className="hover:bg-bg">
-                <td className="max-w-64 px-4 py-3"><Link href={`/jobs/${j.id}`} className="line-clamp-1 font-semibold text-navy">{r.items_text}</Link></td>
-                <td className="px-4 py-3">{TYPE_LABEL[r.type]}</td>
-                <td className="px-4 py-3 whitespace-nowrap">{place(r.from_place_id)} → {place(r.handoff_place_id)}</td>
-                <td className={`px-4 py-3 whitespace-nowrap ${late ? "font-semibold text-danger" : ""}`}>{dayTime(r.deadline)}</td>
-                <td className="px-4 py-3 whitespace-nowrap">{j.requester?.full_name} → {j.traveler?.full_name}</td>
-                <td className="px-4 py-3">{naira(r.fee)}</td>
-                <td className="px-4 py-3"><Pill tone={j.status === "completed" ? "success" : j.status === "disputed" ? "danger" : "soft"}>{JOB_STATUS_LABEL[j.status]}</Pill></td>
+              <tr key={j.id}>
+                <td className="max-w-64"><Link href={`/jobs/${j.id}`} className="line-clamp-1 font-semibold text-foreground underline-offset-2 hover:underline">{r.items_text}</Link></td>
+                <td>{TYPE_LABEL[r.type]}</td>
+                <td className="whitespace-nowrap text-ink-2">{place(r.from_place_id)} → {place(r.handoff_place_id)}</td>
+                <td className={`whitespace-nowrap tabular ${late ? "font-semibold text-critical" : ""}`}>{dayTime(r.deadline)}</td>
+                <td className="whitespace-nowrap">{j.requester?.full_name} → {j.traveler?.full_name}</td>
+                <td className="tabular">{naira(r.fee)}</td>
+                <td><StatusChip tone={TONE[j.status] ?? "muted"}>{JOB_STATUS_LABEL[j.status]}</StatusChip></td>
               </tr>
             );
           })}
         </Table>
-      ) : <Empty title="No jobs match" />}
+      ) : <EmptyState title="No jobs match" />}
     </>
   );
 }

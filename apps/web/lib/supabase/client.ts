@@ -16,6 +16,18 @@ export function supabase() {
   return client;
 }
 
+/**
+ * Gives the Realtime socket the signed-in user's token before a channel joins.
+ * Without this, channels created before the cookie session loads join as anon
+ * and RLS hides every private row (Realtime answers "Error 401: Unauthorized").
+ */
+export async function realtimeAuth() {
+  const db = supabase();
+  const { data } = await db.auth.getSession();
+  if (data.session) await db.realtime.setAuth(data.session.access_token);
+  return db;
+}
+
 export type DB = Database["public"];
 export type Tables<T extends keyof DB["Tables"]> = DB["Tables"][T]["Row"];
 export type Views<T extends keyof DB["Views"]> = DB["Views"][T]["Row"];

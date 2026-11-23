@@ -1,17 +1,17 @@
 "use client";
 
-import Link from "next/link";
 import { useState } from "react";
 import { BottomNav } from "@/components/app-bits";
 import { Icon } from "@/components/icons";
-import { ButtonLink, Card, Empty, Header, Loading, Page, Pill, Segmented, TypeBadge } from "@/components/ui";
+import { ButtonLink, EmptyState, Header, LinkRow, Page, PillTabs, RowSkeletons, SectionLabel, StatusChip, type ChipTone } from "@/components/ui";
 import { useLoad, useRealtime } from "@/lib/data";
-import { dayTime, JOB_STATUS_LABEL, naira } from "@/lib/format";
+import { dayTime, JOB_STATUS_LABEL, naira, TYPE_LABEL } from "@/lib/format";
 import { useSession } from "@/lib/session";
 import { supabase } from "@/lib/supabase/client";
 
 type Tab = "active" | "past";
 const ACTIVE = ["accepted", "purchased", "in_transit", "disputed"];
+const TONE: Record<string, ChipTone> = { completed: "ok", disputed: "critical", refunded: "muted", accepted: "live", purchased: "live", in_transit: "live" };
 
 export default function MyJobs() {
   const { profile, places } = useSession();
@@ -31,55 +31,63 @@ export default function MyJobs() {
   }, [me]);
   useRealtime("myjobs", [{ table: "jobs" }, { table: "requests" }, { table: "trips" }], () => void q.reload());
 
-  const jobs = (q.data?.jobs ?? []).filter((j) => (tab === "active" ? ACTIVE.includes(j.status) : !ACTIVE.includes(j.status)));
+  const all = q.data?.jobs ?? [];
+  const jobs = all.filter((j) => (tab === "active" ? ACTIVE.includes(j.status) : !ACTIVE.includes(j.status)));
+  const activeCount = all.filter((j) => ACTIVE.includes(j.status)).length + (q.data?.waiting.length ?? 0) + (q.data?.trips.length ?? 0);
+  let i = 0;
 
   return (
     <>
       <Header title="My jobs" back={false} />
       <Page>
-        <Segmented<Tab> value={tab} onChange={setTab} options={[{ value: "active", label: "Active" }, { value: "past", label: "Past" }]} />
-        {q.loading ? <Loading /> : (
+        <PillTabs<Tab> aria-label="Jobs" value={tab} onChange={setTab} options={[{ value: "active", label: "Active", count: activeCount }, { value: "past", label: "Past" }]} />
+        {q.loading || !q.data ? <RowSkeletons /> : (
           <>
+            {tab === "active" && q.data!.trips.length > 0 && <SectionLabel>Your trips</SectionLabel>}
             {tab === "active" && q.data!.trips.map((t) => (
-              <Link key={t.id} href={`/trips/${t.id}`} className="no-underline">
-                <Card className="flex items-center gap-3">
-                  <span className="flex size-10 items-center justify-center rounded-full bg-soft text-navy"><Icon name="walk" size={20} /></span>
-                  <div className="flex flex-1 flex-col gap-0.5">
-                    <span className="text-[14.5px] font-semibold text-ink">Your trip · {placeName(t.from_place_id)} → {placeName(t.to_place_id)}</span>
-                    <span className="text-[12.5px] text-muted">Leaves {dayTime(t.leaves_at)} · {t.slots_taken}/{t.capacity} slots used</span>
+              <LinkRow key={t.id} href={`/trips/${t.id}`} i={i++}>
+                <div className="flex items-center gap-3">
+                  <span className="grid size-10 shrink-0 place-items-center rounded-full bg-card-nested ring-1 ring-border dark:ring-glass-border"><Icon name="walk" className="size-[18px]" /></span>
+                  <div className="flex min-w-0 flex-1 flex-col">
+                    <span className="truncate text-[14.5px] font-semibold">{placeName(t.from_place_id)} → {placeName(t.to_place_id)}</span>
+                    <span className="font-mono text-[11px] tracking-wide text-ink-2 uppercase">Leaves <span className="tabular">{dayTime(t.leaves_at)}</span> · <span className="tabular">{t.slots_taken}/{t.capacity}</span> slots</span>
                   </div>
-                  <Icon name="chevron" size={18} className="text-muted" />
-                </Card>
-              </Link>
+                  <Icon name="chevron" className="size-4 text-ink-3" />
+                </div>
+              </LinkRow>
             ))}
+            {tab === "active" && q.data!.waiting.length > 0 && <SectionLabel>Waiting for a traveler</SectionLabel>}
             {tab === "active" && q.data!.waiting.map((r) => (
-              <Link key={r.id} href={`/requests/${r.id}`} className="no-underline">
-                <Card className="flex flex-col gap-2">
-                  <div className="flex items-center justify-between"><TypeBadge type={r.type} urgent={r.urgent} /><Pill tone="amber">{r.status === "review" ? "In review" : "Waiting for a traveler"}</Pill></div>
-                  <span className="line-clamp-1 text-[15px] font-semibold text-ink">{r.items_text}</span>
-                  <span className="text-[12.5px] text-muted">{naira(r.fee + r.item_budget)} held · before {dayTime(r.deadline)}</span>
-                </Card>
-              </Link>
+              <LinkRow key={r.id} href={`/requests/${r.id}`} i={i++}>
+                <div className="flex flex-col gap-1.5">
+                  <div className="flex items-center justify-between gap-2">
+                    <span className="truncate text-[14.5px] font-semibold">{r.items_text}</span>
+                    <StatusChip tone={r.status === "review" ? "warn" : "live"}>{r.status === "review" ? "In review" : TYPE_LABEL[r.type]}</StatusChip>
+                  </div>
+                  <span className="text-[12.5px] text-ink-2"><span className="tabular">{naira(r.fee + r.item_budget)}</span> held · by <span className="tabular">{dayTime(r.deadline)}</span></span>
+                </div>
+              </LinkRow>
             ))}
+            {tab === "active" && jobs.length > 0 && <SectionLabel>Jobs</SectionLabel>}
             {jobs.map((j) => {
               const r = j.request!;
               const asTraveler = j.traveler_id === me;
               return (
-                <Link key={j.id} href={`/jobs/${j.id}`} className="no-underline">
-                  <Card className="flex flex-col gap-2">
+                <LinkRow key={j.id} href={`/jobs/${j.id}`} i={i++}>
+                  <div className="flex flex-col gap-1.5">
                     <div className="flex items-center justify-between gap-2">
-                      <span className="text-[12px] font-semibold text-muted">{asTraveler ? "YOU'RE CARRYING" : "YOUR REQUEST"}</span>
-                      <Pill tone={j.status === "completed" ? "success" : j.status === "disputed" ? "danger" : ACTIVE.includes(j.status) ? "soft" : "muted"}>{JOB_STATUS_LABEL[j.status]}</Pill>
+                      <span className="readout">{asTraveler ? "You're carrying" : "Your request"}</span>
+                      <StatusChip tone={TONE[j.status] ?? "muted"}>{JOB_STATUS_LABEL[j.status]}</StatusChip>
                     </div>
-                    <span className="line-clamp-1 text-[15px] font-semibold text-ink">{r.items_text}</span>
-                    <span className="text-[12.5px] text-muted">To {placeName(r.handoff_place_id)} · {dayTime(r.deadline)} · fee {naira(r.fee)}</span>
-                  </Card>
-                </Link>
+                    <span className="truncate text-[14.5px] font-semibold">{r.items_text}</span>
+                    <span className="text-[12.5px] text-ink-2">To {placeName(r.handoff_place_id)} · <span className="tabular">{dayTime(r.deadline)}</span> · fee <span className="tabular">{naira(r.fee)}</span></span>
+                  </div>
+                </LinkRow>
               );
             })}
             {!jobs.length && (tab === "past" || (!q.data!.waiting.length && !q.data!.trips.length)) && (
-              <Empty title={tab === "active" ? "Nothing on the go" : "No past jobs yet"} body="Post a request or carry one on your next trip."
-                action={<ButtonLink href="/" size="md">Go to home</ButtonLink>} />
+              <EmptyState title={tab === "active" ? "Nothing on the go" : "No past jobs yet"} body="Post a request or carry one on your next trip."
+                action={<ButtonLink href="/" size="pill" variant="surface">Go to home</ButtonLink>} />
             )}
           </>
         )}

@@ -1,6 +1,8 @@
 // Server error codes (private.err in SQL, AppError in Edge Functions) → copy.
 const MESSAGES: Record<string, string> = {
-  not_authenticated: "Please log in again.",
+  not_authenticated: "Your session ended. Log in again to continue.",
+  already_decided: "This was already answered.",
+  message_not_found: "That message is no longer available.",
   account_suspended: "Your account is suspended. Contact support.",
   not_verified: "Your student ID needs to be approved first.",
   insufficient_funds: "Not enough money in your wallet. Top up first.",
@@ -13,7 +15,7 @@ const MESSAGES: Record<string, string> = {
   unfinished_advance: "Finish your current buy job before taking another.",
   over_item_cap: "That's above your item limit.",
   over_budget: "The receipt is above the budget. Ask the requester to approve the new price in chat first.",
-  purchase_first: "Upload the receipt before handing off.",
+  purchase_first: "Confirm what you spent first.",
   deadline_too_soon: "Pick a time at least 15 minutes from now.",
   deadline_too_far: "Pick a time within the next 7 days.",
   after_curfew: "Handoffs must happen between 6:00am and 9:00pm.",
@@ -38,6 +40,8 @@ const MESSAGES: Record<string, string> = {
   payout_failed: "The withdrawal failed. Your money is back in your wallet.",
   name_mismatch: "The account name must match your verified name.",
   invalid_account_number: "Enter a 10-digit account number.",
+  dva_unavailable: "Bank transfer top-up isn't switched on yet. Use card or USSD for now.",
+  payment_not_found: "We couldn't find that payment.",
   payment_provider_error: "Payments are unavailable right now. Try again shortly.",
   too_many_trips: "You can have at most 3 open trips.",
   invalid_time: "Check the departure and return times.",
@@ -51,6 +55,8 @@ export function errorMessage(e: unknown): string {
   if (!e) return "Something went wrong.";
   const err = e as { message?: string; error?: string; code?: string };
   const key = err.error ?? err.message ?? String(e);
+  // Requests made without a session are refused by Postgres grants (42501) or the API (JWT errors).
+  if (err.code === "42501" || /permission denied|JWT expired|invalid JWT/i.test(key)) return MESSAGES.not_authenticated!;
   if (MESSAGES[key]) return MESSAGES[key];
   if (/token has expired|invalid/i.test(key) && /otp|token/i.test(key)) return "That code is wrong or expired.";
   if (/network|fetch/i.test(key)) return "No connection. Check your data and try again.";

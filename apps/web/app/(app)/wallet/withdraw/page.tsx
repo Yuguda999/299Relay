@@ -2,7 +2,8 @@
 
 import { useState } from "react";
 import { VerifiedOnly } from "@/components/gate";
-import { Button, Card, ErrorNote, Field, Footer, Header, Input, Loading, Notice, Page, Select } from "@/components/ui";
+import { Icon } from "@/components/icons";
+import { Alert, Button, Card, Dialog, Field, Footer, Header, Input, Loading, MoneyInput, Page, Row, Select, useNotify } from "@/components/ui";
 import { callFunction, useLoad } from "@/lib/data";
 import { errorMessage } from "@/lib/errors";
 import { naira, toKobo } from "@/lib/format";
@@ -11,10 +12,11 @@ import { supabase } from "@/lib/supabase/client";
 
 export default function Withdraw() {
   const { wallet, profile, refresh } = useSession();
+  const { confirm, toast } = useNotify();
   const [amount, setAmount] = useState("");
   const [adding, setAdding] = useState(false);
   const [bank, setBank] = useState({ code: "", number: "" });
-  const [done, setDone] = useState<string | null>(null);
+  const [bankError, setBankError] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
 
@@ -22,17 +24,21 @@ export default function Withdraw() {
     const { data } = await supabase().from("bank_accounts").select("*").eq("active", true).order("created_at", { ascending: false }).limit(1).maybeSingle();
     return data;
   }, []);
-  const banks = useLoad(async () => (adding ? (await callFunction<{ banks: { name: string; code: string }[] }>("bank-account", undefined, "GET")).banks : []), [adding]);
+  const needsBank = !acct.loading && !acct.data;
+  const banks = useLoad(async () => (adding || needsBank ? (await callFunction<{ banks: { name: string; code: string }[] }>("bank-account", undefined, "GET")).banks : []), [adding, needsBank]);
 
   async function saveBank() {
-    setError(null);
+    setBankError(null);
+    if (!bank.code) return setBankError("Choose your bank.");
+    if (bank.number.length !== 10) return setBankError("Enter your 10-digit account number.");
     setBusy(true);
     try {
       await callFunction("bank-account", { account_number: bank.number, bank_code: bank.code });
       setAdding(false);
+      toast({ title: "Bank account saved" });
       void acct.reload();
     } catch (e) {
-      setError(errorMessage(e));
+      setBankError(errorMessage(e));
     } finally {
       setBusy(false);
     }
@@ -42,10 +48,12 @@ export default function Withdraw() {
     setError(null);
     const kobo = toKobo(amount);
     if (!kobo) return setError("Enter an amount.");
+    const ok = await confirm({ title: `Withdraw ${naira(kobo)}?`, body: `To ${acct.data!.bank_name} ····${acct.data!.account_last4} (${acct.data!.resolved_name}).`, confirmLabel: "Withdraw" });
+    if (!ok) return;
     setBusy(true);
     try {
       await callFunction("withdraw", { amount: kobo / 100 });
-      setDone(`${naira(kobo)} is on its way to your bank.`);
+      toast({ title: "Withdrawal sent", body: `${naira(kobo)} is on its way to your bank.` });
       setAmount("");
     } catch (e) {
       setError(errorMessage(e));
@@ -55,7 +63,20 @@ export default function Withdraw() {
     }
   }
 
-  const showForm = adding || (!acct.loading && !acct.data);
+  const bankForm = (
+    <div className="flex flex-col gap-4">
+      <Field label="Bank" labelId="bank-l">
+        <Select aria-labelledby="bank-l" value={bank.code} onChange={(v) => setBank((b) => ({ ...b, code: v }))} searchable
+          placeholder={banks.loading ? "Loading banks…" : "Choose your bank"} searchPlaceholder="Search banks"
+          options={(banks.data ?? []).map((b) => ({ value: b.code, label: b.name }))} disabled={banks.loading} />
+      </Field>
+      <Field label="Account number" htmlFor="num" hint={`The account name must match your verified name (${profile?.full_name}).`}>
+        <Input id="num" inputMode="numeric" maxLength={10} className="tabular" value={bank.number} onChange={(e) => setBank((b) => ({ ...b, number: e.target.value.replace(/\D/g, "") }))} />
+      </Field>
+      {Boolean(banks.error) && <Alert tone="critical">{errorMessage(banks.error)}</Alert>}
+      <Alert tone="critical">{bankError}</Alert>
+    </div>
+  );
 
   return (
     <VerifiedOnly title="Withdraw to bank">
@@ -63,47 +84,38 @@ export default function Withdraw() {
         <Header title="Withdraw to bank" back="/wallet" />
         <Page className="gap-4">
           <Card className="flex items-center justify-between">
-            <span className="text-[13.5px] text-muted">Available</span>
-            <span className="text-[18px] font-bold">{naira(wallet?.available)}</span>
+            <span className="readout">Available</span>
+            <span className="font-display text-kpi-sm font-semibold tabular">{naira(wallet?.available)}</span>
           </Card>
-          {acct.loading ? <Loading /> : showForm ? (
-            <Card className="flex flex-col gap-3">
-              <h2 className="text-[15px] font-bold">Add your bank account</h2>
-              <p className="text-[13px] text-muted">The account name must match your verified name ({profile?.full_name}).</p>
-              <Field label="Bank" htmlFor="bank">
-                <Select id="bank" value={bank.code} onChange={(e) => setBank((b) => ({ ...b, code: e.target.value }))}>
-                  <option value="">{banks.loading ? "Loading banks…" : "Choose your bank"}</option>
-                  {(banks.data ?? []).map((b) => <option key={b.code} value={b.code}>{b.name}</option>)}
-                </Select>
-              </Field>
-              <Field label="Account number" htmlFor="num">
-                <Input id="num" inputMode="numeric" maxLength={10} value={bank.number} onChange={(e) => setBank((b) => ({ ...b, number: e.target.value.replace(/\D/g, "") }))} />
-              </Field>
-              <Button size="md" variant="dark" loading={busy} disabled={!bank.code || bank.number.length !== 10} onClick={saveBank}>Verify and save</Button>
-              {Boolean(banks.error) && <ErrorNote>{errorMessage(banks.error)}</ErrorNote>}
+          {acct.loading ? <Loading /> : needsBank ? (
+            <Card className="flex flex-col gap-4">
+              <h2 className="font-display text-[17px] font-semibold">Add your bank account</h2>
+              {bankForm}
+              <Button variant="inverse" size="pill" loading={busy} onClick={saveBank}>Verify and save</Button>
             </Card>
           ) : (
-            <Card className="flex items-center justify-between gap-3">
-              <div className="flex flex-col">
-                <span className="text-[14.5px] font-semibold">{acct.data!.bank_name} ····{acct.data!.account_last4}</span>
-                <span className="text-[12.5px] text-muted">{acct.data!.resolved_name}</span>
-              </div>
-              <Button size="md" variant="soft" onClick={() => setAdding(true)}>Change</Button>
-            </Card>
+            <>
+              <Card className="flex items-center gap-3">
+                <span className="grid size-10 place-items-center rounded-full bg-card-nested ring-1 ring-border dark:ring-glass-border"><Icon name="bank" className="size-[18px]" /></span>
+                <div className="flex min-w-0 flex-1 flex-col">
+                  <span className="truncate text-[14.5px] font-semibold">{acct.data!.bank_name} <span className="font-mono tabular">····{acct.data!.account_last4}</span></span>
+                  <span className="truncate text-[12.5px] text-ink-2">{acct.data!.resolved_name}</span>
+                </div>
+                <Button size="sm" variant="surface" onClick={() => setAdding(true)}>Change</Button>
+              </Card>
+              <Field label="Amount" htmlFor="amt" hint="Minimum ₦1,000.">
+                <MoneyInput id="amt" value={amount} onChange={(e) => setAmount(e.target.value)} placeholder="1,000" />
+              </Field>
+              {toKobo(amount) && <Row label="You'll receive" value={naira(toKobo(amount))} strong />}
+            </>
           )}
-          {!showForm && (
-            <Field label="Amount (₦)" htmlFor="amt" hint="Minimum ₦1,000.">
-              <Input id="amt" inputMode="decimal" value={amount} onChange={(e) => setAmount(e.target.value)} placeholder="1,000" />
-            </Field>
-          )}
-          {done && <Notice tone="success">{done}</Notice>}
-          <ErrorNote>{error}</ErrorNote>
+          <Alert tone="critical">{error}</Alert>
         </Page>
-        {!showForm && (
-          <Footer>
-            <Button loading={busy} onClick={withdraw}>Withdraw</Button>
-          </Footer>
-        )}
+        {!needsBank && !acct.loading && <Footer><Button loading={busy} onClick={withdraw}>Withdraw</Button></Footer>}
+        <Dialog open={adding} onClose={() => setAdding(false)} title="Change bank account" size="md"
+          footer={<><Button variant="surface" size="pill" onClick={() => setAdding(false)}>Cancel</Button><Button size="pill" loading={busy} onClick={saveBank}>Verify and save</Button></>}>
+          {bankForm}
+        </Dialog>
       </div>
     </VerifiedOnly>
   );

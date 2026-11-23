@@ -3,19 +3,30 @@
 import { useRouter } from "next/navigation";
 import { useEffect, useMemo, useState } from "react";
 import { PhotoPicker } from "@/components/app-bits";
-import { Button, Chip, ErrorNote, Field, Footer, Header, Input, Notice, Page, Row, Select, Textarea } from "@/components/ui";
+import { DocumentPicker } from "@/components/print";
+import { Icon } from "@/components/icons";
+import { Alert, Button, ChoiceChips, Field, Footer, Header, MoneyInput, Page, Row, Select, Textarea, TimeSelect, type Option } from "@/components/ui";
 import { uploadPhoto } from "@/lib/data";
 import { errorMessage } from "@/lib/errors";
-import { lagosToIso, naira, toKobo, TYPE_LABEL } from "@/lib/format";
+import { isPurchase, lagosToIso, naira, toKobo, TYPE_LABEL } from "@/lib/format";
+import { DEFAULT_PRINT, estimatePrintNaira, PRINT_LABELS, printSummary, uploadDocuments, type DocDraft, type PrintOptions } from "@/lib/print";
 import { useSession } from "@/lib/session";
 import { supabase, type Enums, type Tables } from "@/lib/supabase/client";
 
 type When = "hour" | "today" | "tomorrow";
+const KIND_GROUP: Record<string, string> = { market: "Markets", gate: "Gates", hostel: "Hostels", faculty: "Faculties", office: "Offices", other: "Other" };
+
+export function placeOptions(places: Tables<"places">[], onlyHandoff = false): Option[] {
+  return places
+    .filter((p) => !onlyHandoff || p.is_handoff_point)
+    .sort((a, b) => (KIND_GROUP[a.kind]! + a.name).localeCompare(KIND_GROUP[b.kind]! + b.name))
+    .map((p) => ({ value: p.id, label: p.name, group: KIND_GROUP[p.kind], hint: p.is_handoff_point ? "Handoff point" : undefined }));
+}
 
 export function RequestForm({ trip }: { trip?: Tables<"trips"> | null }) {
   const router = useRouter();
   const { places, wallet } = useSession();
-  const allowed = trip?.job_types ?? (["buy", "pick_up", "drop_off"] as Enums<"request_type">[]);
+  const allowed = trip?.job_types ?? (["buy", "print", "pick_up", "drop_off"] as Enums<"request_type">[]);
   const handoffs = useMemo(() => places.filter((p) => p.is_handoff_point), [places]);
 
   const [type, setType] = useState<Enums<"request_type">>(allowed[0]!);
@@ -23,27 +34,32 @@ export function RequestForm({ trip }: { trip?: Tables<"trips"> | null }) {
   const [photos, setPhotos] = useState<File[]>([]);
   const [fromPick, setFrom] = useState(trip?.to_place_id ?? "");
   const [toPick, setTo] = useState("");
-  // Defaults until the user picks: a market to buy from, the first handoff point.
-  const from = fromPick || (places.find((p) => p.kind === "market")?.id ?? places[0]?.id ?? "");
+  const [docs, setDocs] = useState<DocDraft[]>([]);
+  const [print, setPrint] = useState<PrintOptions>(DEFAULT_PRINT);
+  const [budgetTouched, setBudgetTouched] = useState(false);
+  const businessCentre = places.find((p) => /business cent/i.test(p.name))?.id;
+  const from = fromPick || (type === "print" ? businessCentre : undefined) || (places.find((p) => p.kind === "market")?.id ?? places[0]?.id ?? "");
   const to = toPick || (handoffs[0]?.id ?? "");
   const [budget, setBudget] = useState("");
   const [when, setWhen] = useState<When>("today");
   const [at, setAt] = useState("18:00");
-  const [extra, setExtra] = useState(0); // naira added on top of the suggested fee
-  const [quote, setQuote] = useState<{ suggested_fee: number; total_hold: number } | null>(null);
+  const [extra, setExtra] = useState(0);
+  const [quote, setQuote] = useState<{ suggested_fee: number } | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
 
-  const budgetKobo = type === "buy" ? (toKobo(budget) ?? 0) : 0;
+  const pages = docs.reduce((n, d) => n + (d.pages ?? 0), 0);
+  const estimate = estimatePrintNaira(pages, print);
+  // Print budget follows the estimate until the requester types their own.
+  const budgetText = type === "print" && !budgetTouched ? (estimate ? String(estimate) : "") : budget;
+  const budgetKobo = isPurchase(type) ? (toKobo(budgetText) ?? 0) : 0;
   const urgent = when === "hour";
 
   useEffect(() => {
     if (!from || !to) return;
     const t = setTimeout(async () => {
-      const { data } = await supabase().rpc("quote_request", {
-        p_type: type, p_from_place: from, p_handoff_place: to, p_item_budget: budgetKobo, p_urgent: urgent,
-      });
-      setQuote(data as { suggested_fee: number; total_hold: number } | null);
+      const { data } = await supabase().rpc("quote_request", { p_type: type, p_from_place: from, p_handoff_place: to, p_item_budget: budgetKobo, p_urgent: urgent });
+      setQuote(data as { suggested_fee: number } | null);
     }, 250);
     return () => clearTimeout(t);
   }, [type, from, to, budgetKobo, urgent]);
@@ -52,29 +68,24 @@ export function RequestForm({ trip }: { trip?: Tables<"trips"> | null }) {
   const total = fee + budgetKobo;
   const short = wallet ? total > wallet.available : false;
 
-  function deadline(): string {
-    if (when === "hour") return new Date(Date.now() + 60 * 60_000).toISOString();
-    return lagosToIso(when === "tomorrow" ? 1 : 0, at);
-  }
-
   async function submit(e: React.FormEvent) {
     e.preventDefault();
     setError(null);
-    if (type === "buy" && !budgetKobo) return setError("Enter the item budget.");
+    if (type === "print") {
+      if (!docs.length) return setError("Add the documents to print.");
+      if (docs.some((d) => !d.pages)) return setError("Enter the number of pages for each document.");
+    } else if (items.trim().length < 2) return setError("Say what you need.");
+    if (isPurchase(type) && !budgetKobo) return setError(type === "print" ? "Enter the print budget." : "Enter the item budget.");
     setBusy(true);
     try {
-      const photo = photos[0] ? await uploadPhoto("request-photos", photos[0]) : null;
+      const photo = type !== "print" && photos[0] ? await uploadPhoto("request-photos", photos[0]) : null;
+      const files = type === "print" ? await uploadDocuments(docs) : null;
+      const text = type === "print" ? [`Print: ${printSummary(pages, print)}`, items.trim()].filter(Boolean).join("\n") : items;
       const { data, error } = await supabase().rpc("create_request", {
-        p_type: type,
-        p_items_text: items,
-        p_from_place: from,
-        p_handoff_place: to,
-        p_deadline: deadline(),
-        p_item_budget: budgetKobo,
-        p_fee: fee,
-        p_urgent: urgent,
-        p_photo_path: photo ?? undefined,
-        p_trip: trip?.id,
+        p_type: type, p_items_text: text, p_from_place: from, p_handoff_place: to,
+        p_deadline: urgent ? new Date(Date.now() + 3600_000).toISOString() : lagosToIso(when === "tomorrow" ? 1 : 0, at),
+        p_item_budget: budgetKobo, p_fee: fee, p_urgent: urgent, p_photo_path: photo ?? undefined, p_trip: trip?.id,
+        p_files: files ?? undefined, p_print_options: type === "print" ? print : undefined,
       });
       if (error) throw error;
       router.replace(`/requests/${data.id}`);
@@ -84,83 +95,106 @@ export function RequestForm({ trip }: { trip?: Tables<"trips"> | null }) {
     }
   }
 
-  const fromLabel = type === "drop_off" ? "Pick it up from" : type === "buy" ? "Buy it at" : "Pick it up at";
+  const fromLabel = type === "drop_off" ? "Pick it up from" : type === "buy" ? "Buy it at" : type === "print" ? "Print it at" : "Pick it up at";
 
   return (
-    <form onSubmit={submit} className="flex min-h-dvh flex-col">
+    <form onSubmit={submit} className="flex min-h-dvh flex-col" noValidate>
       <Header title={trip ? "Send request to trip" : "New request"} />
-      <Page className="gap-3.5">
-        <fieldset className="flex flex-col gap-2">
-          <legend className="mb-2 text-[13.5px] font-semibold">What kind of job?</legend>
-          <div className="grid grid-cols-3 gap-2">
-            {allowed.map((t) => (
-              <Chip key={t} on={type === t} onClick={() => setType(t)} className="min-h-12 rounded-xl px-1.5 text-[14px]">{TYPE_LABEL[t]}</Chip>
-            ))}
-          </div>
-        </fieldset>
+      <Page className="gap-4">
+        <ChoiceChips aria-label="Kind of job" value={type} onChange={setType} columns={allowed.length}
+          options={allowed.map((t) => ({ value: t, label: TYPE_LABEL[t] }))} />
 
-        <Field label={type === "buy" ? "What should they buy?" : "What is it?"} htmlFor="items">
-          <Textarea id="items" rows={2} value={items} onChange={(e) => setItems(e.target.value)} required minLength={2} maxLength={1000}
-            placeholder={type === "buy" ? "2 tins of milk, 1 carton of Indomie" : "Parcel under the name Aisha Bello"} />
+        {type === "print" ? (
+          <>
+            <Field label="Documents" hint="PDF, Word, PowerPoint or photos, up to 20 MB each. Only the traveler who accepts can open them.">
+              <DocumentPicker docs={docs} onChange={setDocs} />
+            </Field>
+            <div className="grid grid-cols-[auto_1fr] items-center gap-x-4 gap-y-3 rounded-card bg-card p-4 dark:ring-1 dark:ring-glass-border">
+              <span className="text-[13.5px] font-medium">Copies</span>
+              <div className="flex items-center gap-1.5 justify-self-end">
+                <Button variant="surface" size="circle-sm" aria-label="Fewer copies" disabled={print.copies <= 1} onClick={() => setPrint((o) => ({ ...o, copies: o.copies - 1 }))}><Icon name="minus" /></Button>
+                <span className="w-8 text-center text-[15px] font-semibold tabular" aria-live="polite">{print.copies}</span>
+                <Button variant="surface" size="circle-sm" aria-label="More copies" disabled={print.copies >= 50} onClick={() => setPrint((o) => ({ ...o, copies: o.copies + 1 }))}><Icon name="plus" /></Button>
+              </div>
+              <span className="text-[13.5px] font-medium">Colour</span>
+              <ChoiceChips aria-label="Colour" className="justify-self-end" value={print.color} onChange={(v) => setPrint((o) => ({ ...o, color: v }))}
+                options={(["bw", "color"] as const).map((v) => ({ value: v, label: PRINT_LABELS.color[v] }))} />
+              <span className="text-[13.5px] font-medium">Sides</span>
+              <ChoiceChips aria-label="Sides" className="justify-self-end" value={print.sides} onChange={(v) => setPrint((o) => ({ ...o, sides: v }))}
+                options={(["single", "double"] as const).map((v) => ({ value: v, label: v === "single" ? "Single" : "Double" }))} />
+              <span className="text-[13.5px] font-medium">Binding</span>
+              <ChoiceChips aria-label="Binding" className="justify-self-end" value={print.binding} onChange={(v) => setPrint((o) => ({ ...o, binding: v }))}
+                options={(["none", "staple", "spiral"] as const).map((v) => ({ value: v, label: v === "none" ? "None" : v === "staple" ? "Staple" : "Spiral" }))} />
+            </div>
+            <Field label="Instructions" optional htmlFor="items">
+              <Textarea id="items" rows={2} value={items} onChange={(e) => setItems(e.target.value)} maxLength={600}
+                placeholder="Print pages 3–10 only, landscape, cover page in colour" />
+            </Field>
+          </>
+        ) : (
+          <>
+            <Field label={type === "buy" ? "What should they buy?" : "What is it?"} htmlFor="items">
+              <Textarea id="items" rows={3} value={items} onChange={(e) => setItems(e.target.value)} maxLength={1000}
+                placeholder={type === "buy" ? "2 tins of milk, 1 carton of Indomie" : "Parcel under the name Aisha Bello"} />
+            </Field>
+            <Field label="Photo" optional hint="Helps the traveler find the right thing.">
+              <PhotoPicker files={photos} onChange={setPhotos} max={1} capture="environment" />
+            </Field>
+          </>
+        )}
+
+        <Field label={fromLabel} labelId="from-l">
+          <Select aria-labelledby="from-l" value={from} onChange={setFrom} options={placeOptions(places)} searchPlaceholder="Search places" />
         </Field>
-
-        <Field label={<>Photo <span className="font-normal text-muted">(optional, helps the traveler find it)</span></>}>
-          <PhotoPicker files={photos} onChange={setPhotos} max={1} capture="environment" />
+        <Field label="Hand it to me at" labelId="to-l" hint="Public handoff points only: gates, porters' lodges, faculty entrances.">
+          <Select aria-labelledby="to-l" value={to} onChange={setTo} options={placeOptions(places, true)} searchPlaceholder="Search handoff points" />
         </Field>
-
-        <div className="grid grid-cols-2 gap-2.5">
-          <Field label={fromLabel} htmlFor="from">
-            <Select id="from" value={from} onChange={(e) => setFrom(e.target.value)} required>
-              {places.map((p) => <option key={p.id} value={p.id}>{p.name}</option>)}
-            </Select>
-          </Field>
-          <Field label="Hand it to me at" htmlFor="to">
-            <Select id="to" value={to} onChange={(e) => setTo(e.target.value)} required>
-              {handoffs.map((p) => <option key={p.id} value={p.id}>{p.name}</option>)}
-            </Select>
-          </Field>
-        </div>
 
         {type === "buy" && (
-          <Field label="Item budget (₦)" htmlFor="budget" hint="If it costs more, your traveler asks before buying.">
-            <Input id="budget" inputMode="decimal" value={budget} onChange={(e) => setBudget(e.target.value)} placeholder="3,400" required />
+          <Field label="Item budget" htmlFor="budget" hint="If it costs more, your traveler asks before buying.">
+            <MoneyInput id="budget" value={budget} onChange={(e) => setBudget(e.target.value)} placeholder="3,400" />
+          </Field>
+        )}
+        {type === "print" && (
+          <Field label="Print budget" htmlFor="budget"
+            hint={estimate ? <>Estimated from <span className="tabular">{pages}</span> pages at typical business-centre prices. Change it if your centre charges differently; unused money comes back.</> : "Add documents and page counts to get an estimate."}>
+            <MoneyInput id="budget" value={budgetText} onChange={(e) => { setBudgetTouched(true); setBudget(e.target.value); }} placeholder="600" />
           </Field>
         )}
 
-        <fieldset className="flex flex-col gap-2">
-          <legend className="mb-2 text-[13.5px] font-semibold">When?</legend>
-          <div className="flex flex-wrap gap-2">
-            <Chip on={when === "hour"} onClick={() => setWhen("hour")}>Within 1 hour (+₦100)</Chip>
-            <Chip on={when === "today"} onClick={() => setWhen("today")}>Today</Chip>
-            <Chip on={when === "tomorrow"} onClick={() => setWhen("tomorrow")}>Tomorrow</Chip>
-          </div>
-          {when !== "hour" && (
-            <Field label="Before" htmlFor="at" hint="Handoffs happen between 6:00am and 9:00pm.">
-              <Input id="at" type="time" min="06:00" max="21:00" value={at} onChange={(e) => setAt(e.target.value)} required />
-            </Field>
-          )}
-        </fieldset>
+        <Field label="When?" labelId="when-l">
+          <ChoiceChips aria-label="When" value={when} onChange={setWhen}
+            options={[{ value: "hour", label: "Within 1 hour" }, { value: "today", label: "Today" }, { value: "tomorrow", label: "Tomorrow" }]} />
+        </Field>
+        {when === "hour"
+          ? <Alert tone="signal">Urgent jobs add ₦100 to the fee.</Alert>
+          : <Field label="Before" labelId="at-l" hint="Handoffs happen between 6:00am and 9:00pm.">
+              <TimeSelect aria-labelledby="at-l" value={at} onChange={setAt} min="06:30" max="21:00" step={30} />
+            </Field>}
 
-        <div className="flex items-center justify-between gap-3">
-          <span className="text-[13.5px] font-semibold">Add to the fee <span className="font-normal text-muted">(gets picked up faster)</span></span>
-          <div className="flex items-center gap-2">
-            <Button variant="outline" size="md" aria-label="Less" disabled={extra === 0} onClick={() => setExtra((x) => Math.max(0, x - 50))}>−</Button>
-            <span className="w-14 text-center text-[14px] font-semibold">+₦{extra}</span>
-            <Button variant="outline" size="md" aria-label="More" onClick={() => setExtra((x) => Math.min(1000, x + 50))}>+</Button>
+        <div className="bento flex items-center justify-between gap-3 p-3 pl-4">
+          <span className="flex flex-col">
+            <span className="text-[14px] font-medium">Add to the fee</span>
+            <span className="text-[12.5px] text-ink-2">Gets picked up faster</span>
+          </span>
+          <div className="flex items-center gap-1.5">
+            <Button variant="surface" size="circle-sm" aria-label="Decrease fee" disabled={extra === 0} onClick={() => setExtra((x) => Math.max(0, x - 50))}><Icon name="minus" /></Button>
+            <span className="w-16 text-center text-[14px] font-semibold tabular" aria-live="polite">+₦{extra}</span>
+            <Button variant="surface" size="circle-sm" aria-label="Increase fee" disabled={extra >= 1000} onClick={() => setExtra((x) => Math.min(1000, x + 50))}><Icon name="plus" /></Button>
           </div>
         </div>
-        <ErrorNote>{error}</ErrorNote>
+        <Alert tone="critical">{error}</Alert>
       </Page>
 
       <Footer>
         <div className="flex flex-col gap-1">
-          {type === "buy" && <Row label="Item budget" value={naira(budgetKobo)} />}
+          {isPurchase(type) && <Row label={type === "print" ? "Print budget" : "Item budget"} value={naira(budgetKobo)} />}
           <Row label={extra ? "Delivery fee" : "Delivery fee (suggested)"} value={quote ? naira(fee) : "…"} />
           <Row label="Held from wallet" value={quote ? naira(total) : "…"} strong />
         </div>
-        {short && <Notice tone="amber">Your wallet has {naira(wallet?.available)}. Top up before posting.</Notice>}
+        {short && <Alert tone="warn">Your wallet has {naira(wallet?.available)}. Top up before posting.</Alert>}
         <Button type="submit" loading={busy} disabled={!quote || short}>Post request</Button>
-        <span className="text-center text-[12px] text-muted">Money is only released when you confirm with your handoff code.</span>
+        <span className="text-center text-[12px] text-ink-2">Money is released only when you confirm with your handoff code.</span>
       </Footer>
     </form>
   );

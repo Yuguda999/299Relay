@@ -73,8 +73,9 @@ export async function signedUrl(bucket: string, path: string | null | undefined)
   return data.signedUrl;
 }
 
+/** undefined while loading, null when the file is missing or unreadable. */
 export function useSignedUrl(bucket: string, path: string | null | undefined) {
-  const [url, setUrl] = useState<string | null>(null);
+  const [url, setUrl] = useState<string | null | undefined>(undefined);
   useEffect(() => {
     let live = true;
     void signedUrl(bucket, path).then((u) => live && setUrl(u));

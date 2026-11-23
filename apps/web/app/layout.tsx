@@ -1,10 +1,12 @@
 import type { Metadata, Viewport } from "next";
-import { Inter, Montserrat } from "next/font/google";
+import { Geist, Geist_Mono, Montserrat } from "next/font/google";
+import { Providers } from "@/components/providers";
 import { ServiceWorker } from "@/components/service-worker";
 import "./globals.css";
 
-const inter = Inter({ variable: "--font-inter", subsets: ["latin"] });
-const montserrat = Montserrat({ variable: "--font-montserrat", subsets: ["latin"], weight: ["600", "700", "800"] });
+const geistSans = Geist({ variable: "--font-geist-sans", subsets: ["latin"] });
+const geistMono = Geist_Mono({ variable: "--font-geist-mono", subsets: ["latin"] });
+const montserrat = Montserrat({ variable: "--font-montserrat", subsets: ["latin"], weight: ["500", "600"], display: "swap" });
 
 export const metadata: Metadata = {
   title: "299 RELAY",
@@ -15,7 +17,10 @@ export const metadata: Metadata = {
 };
 
 export const viewport: Viewport = {
-  themeColor: "#0B1F44",
+  themeColor: [
+    { media: "(prefers-color-scheme: light)", color: "#f2f4f8" },
+    { media: "(prefers-color-scheme: dark)", color: "#060c1a" },
+  ],
   width: "device-width",
   initialScale: 1,
   viewportFit: "cover",
@@ -23,11 +28,13 @@ export const viewport: Viewport = {
 
 export default function RootLayout({ children }: LayoutProps<"/">) {
   return (
-    <html lang="en" className={`${inter.variable} ${montserrat.variable} antialiased`}>
-      <body className="min-h-dvh">
-        <div className="mx-auto flex min-h-dvh w-full max-w-[480px] flex-col bg-bg sm:border-x sm:border-line">
-          {children}
-        </div>
+    <html lang="en" suppressHydrationWarning className={`${geistSans.variable} ${geistMono.variable} ${montserrat.variable} antialiased`}>
+      <body className="min-h-dvh" suppressHydrationWarning>
+        <Providers>
+          <div className="mx-auto flex min-h-dvh w-full max-w-[480px] flex-col bg-band sm:shadow-[0_0_0_1px_var(--border)]">
+            {children}
+          </div>
+        </Providers>
         <ServiceWorker />
       </body>
     </html>

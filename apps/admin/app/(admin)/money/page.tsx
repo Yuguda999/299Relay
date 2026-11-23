@@ -2,19 +2,20 @@
 
 import Link from "next/link";
 import { PageTitle, Table } from "@/components/shell";
-import { Card, Loading, Notice, Pill, Row } from "@/components/ui";
+import { Alert, Card, Loading, Row, StatusChip } from "@/components/ui";
 import { useLoad } from "@/lib/admin";
 import { dayTime, naira } from "@/lib/format";
 import { supabase } from "@/lib/supabase/client";
 
 type Health = {
-  problems: { problem: string; account_id: string | null; expected: number; actual: number }[];
+  problems: { problem: string }[];
   accounts: Record<string, number>;
   wallets_available: number;
   wallets_held: number;
   stuck_payouts: number;
   checked_at: string;
 };
+const tone = (s: string) => (s === "success" ? "ok" : s === "pending" ? "warn" : "critical") as "ok" | "warn" | "critical";
 
 export default function Money() {
   const q = useLoad(async () => {
@@ -29,54 +30,53 @@ export default function Money() {
 
   if (q.loading || !q.data) return <Loading />;
   const { h, payouts, payments } = q.data;
-  const clearing = -(h.accounts.gateway_clearing ?? 0);
 
   return (
     <>
       <PageTitle title="Money" sub={`Ledger checked ${dayTime(h.checked_at)}`} />
-      {h.problems.length ? (
-        <Notice tone="amber">Ledger check found {h.problems.length} problem(s): {h.problems.map((p) => p.problem).join(", ")}. Stop payouts and investigate before money moves further.</Notice>
-      ) : <Notice tone="success">Ledger balanced: every account cache matches its entries and the ledger sums to zero.</Notice>}
+      {h.problems.length
+        ? <Alert tone="critical" title={`Ledger check found ${h.problems.length} problem(s)`}>{h.problems.map((p) => p.problem).join(", ")}. Pause payouts and investigate before money moves further.</Alert>
+        : <Alert tone="ok" title="Ledger balanced">Every account cache matches its entries and the ledger sums to zero.</Alert>}
 
       <div className="grid gap-4 md:grid-cols-2">
-        <Card className="flex flex-col gap-2 p-5">
-          <h3 className="text-[13px] font-bold">What students hold</h3>
+        <Card i={0} className="flex flex-col gap-2 p-5">
+          <h3 className="readout mb-1">What students hold</h3>
           <Row label="Wallets, available" value={naira(h.wallets_available)} />
-          <Row label="Wallets, held in escrow" value={naira(h.wallets_held)} />
+          <Row label="Held in escrow" value={naira(h.wallets_held)} />
           <Row label="Payouts in transit" value={naira(h.accounts.payouts_in_transit)} />
         </Card>
-        <Card className="flex flex-col gap-2 p-5">
-          <h3 className="text-[13px] font-bold">Platform</h3>
+        <Card i={1} className="flex flex-col gap-2 p-5">
+          <h3 className="readout mb-1">Platform</h3>
           <Row label="Commission earned" value={naira(h.accounts.platform_revenue)} strong />
-          <Row label="Net received through Paystack" value={naira(clearing)} />
-          <p className="text-[12px] text-muted">Compare with the Paystack balance daily. Net received should equal wallets + escrow + in transit + commission.</p>
+          <Row label="Net received through Paystack" value={naira(-(h.accounts.gateway_clearing ?? 0))} />
+          <p className="text-[12px] leading-relaxed text-ink-2">Compare with the Paystack balance daily. Net received should equal wallets + escrow + in transit + commission.</p>
         </Card>
       </div>
 
-      <h2 className="text-[16px] font-bold">Payouts {h.stuck_payouts > 0 && <Pill tone="danger">{h.stuck_payouts} stuck over 1h</Pill>}</h2>
-      <Table head={["When", "Student", "Bank", "Amount", "Status", "Reference"]}>
+      <div className="flex items-center gap-2 pt-2"><h2 className="readout">Payouts</h2>{h.stuck_payouts > 0 && <StatusChip tone="critical">{h.stuck_payouts} stuck over 1h</StatusChip>}</div>
+      <Table head={["When", "Student", "Bank", "Amount", "Status", "Reference"]} minWidth={820}>
         {payouts.map((p) => (
-          <tr key={p.id}>
-            <td className="px-4 py-2.5">{dayTime(p.created_at)}</td>
-            <td className="px-4 py-2.5"><Link href={`/users/${p.profile?.id}`} className="text-navy">{p.profile?.full_name}</Link></td>
-            <td className="px-4 py-2.5">{p.bank?.bank_name} ····{p.bank?.account_last4}</td>
-            <td className="px-4 py-2.5 font-semibold">{naira(p.amount)}</td>
-            <td className="px-4 py-2.5"><Pill tone={p.status === "success" ? "success" : p.status === "pending" ? "amber" : "danger"}>{p.status}</Pill>{p.failure_reason ? <span className="ml-1 text-[12px] text-muted">{p.failure_reason}</span> : null}</td>
-            <td className="px-4 py-2.5 font-mono text-[12px]">{p.paystack_reference}</td>
+          <tr key={p.id} id={p.id}>
+            <td className="font-mono text-[12px] text-ink-2 tabular">{dayTime(p.created_at)}</td>
+            <td><Link href={`/users/${p.profile?.id}`} className="text-foreground underline-offset-2 hover:underline">{p.profile?.full_name}</Link></td>
+            <td className="text-ink-2">{p.bank?.bank_name} <span className="font-mono">····{p.bank?.account_last4}</span></td>
+            <td className="font-semibold tabular">{naira(p.amount)}</td>
+            <td><StatusChip tone={tone(p.status)}>{p.status}</StatusChip>{p.failure_reason && <span className="ml-1.5 text-[12px] text-ink-2">{p.failure_reason}</span>}</td>
+            <td className="font-mono text-[11.5px] text-ink-2">{p.paystack_reference}</td>
           </tr>
         ))}
       </Table>
 
-      <h2 className="text-[16px] font-bold">Top-ups</h2>
-      <Table head={["When", "Student", "Method", "Amount", "Status", "Reference"]}>
+      <h2 className="readout pt-2">Top-ups</h2>
+      <Table head={["When", "Student", "Method", "Amount", "Status", "Reference"]} minWidth={820}>
         {payments.map((p) => (
           <tr key={p.id}>
-            <td className="px-4 py-2.5">{dayTime(p.created_at)}</td>
-            <td className="px-4 py-2.5"><Link href={`/users/${p.profile?.id}`} className="text-navy">{p.profile?.full_name}</Link></td>
-            <td className="px-4 py-2.5">{p.method}</td>
-            <td className="px-4 py-2.5 font-semibold">{naira(p.amount)}</td>
-            <td className="px-4 py-2.5"><Pill tone={p.status === "success" ? "success" : p.status === "pending" ? "amber" : "danger"}>{p.status}</Pill></td>
-            <td className="px-4 py-2.5 font-mono text-[12px]">{p.paystack_reference}</td>
+            <td className="font-mono text-[12px] text-ink-2 tabular">{dayTime(p.created_at)}</td>
+            <td><Link href={`/users/${p.profile?.id}`} className="text-foreground underline-offset-2 hover:underline">{p.profile?.full_name}</Link></td>
+            <td className="text-ink-2">{p.method}</td>
+            <td className="font-semibold tabular">{naira(p.amount)}</td>
+            <td><StatusChip tone={tone(p.status)}>{p.status}</StatusChip></td>
+            <td className="font-mono text-[11.5px] text-ink-2">{p.paystack_reference}</td>
           </tr>
         ))}
       </Table>

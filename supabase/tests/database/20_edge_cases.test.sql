@@ -1,14 +1,15 @@
 -- Cancellations, releases, code lockout, disputes, trips, substitutes, payouts.
 begin;
 select plan(35);
+select tests.snap();
 
 -- ════ Cancel before acceptance: full refund ════
 select tests.act_as('aisha@relay.test');
 select tests.put('r1', (public.create_request('pick_up', 'Parcel at the main gate, name on it: Aisha',
   tests.place('Main Gate'), tests.place('Amina Hall Gate'), tests.tomorrow_at(12))).id::text);
-select is((tests.wallet('aisha@relay.test')).held, 30000::bigint, 'cross-zone pick up holds ₦300');
+select is((tests.wallet('aisha@relay.test')).held - tests.base('aisha_held'), 30000::bigint, 'cross-zone pick up holds ₦300');
 select is((public.cancel_request(tests.get('r1')::uuid)).status, 'cancelled'::public.request_status, 'requester cancels');
-select is((tests.wallet('aisha@relay.test')).available, 1000000::bigint, 'full refund');
+select is((tests.wallet('aisha@relay.test')).available - tests.base('aisha_available'), 0::bigint, 'full refund');
 
 -- ════ Fee can be raised, never lowered ════
 select throws_ok($$select public.create_request('pick_up', 'Parcel', tests.place('Main Gate'), tests.place('Amina Hall Gate'),
@@ -29,7 +30,7 @@ select tests.put('r2', (public.create_request('buy', 'Bread and Peak milk', test
   tests.tomorrow_at(16), 100000)).id::text);
 select tests.act_as('tunde@relay.test');
 select tests.put('j2', (public.accept_job(tests.get('r2')::uuid)).id::text);
-select is((tests.wallet('tunde@relay.test')).available, 300000::bigint, 'advance paid to traveler');
+select is((tests.wallet('tunde@relay.test')).available - tests.base('tunde_available'), 100000::bigint, 'advance paid to traveler');
 
 -- One unfinished advance at a time
 select tests.act_as('aisha@relay.test');
@@ -40,7 +41,7 @@ select throws_ok(format($$select public.accept_job(%L)$$, tests.get('r3')), 'P00
 
 select tests.act_as('aisha@relay.test');
 select is((public.cancel_request(tests.get('r2')::uuid)).status, 'cancelled'::public.request_status, 'cancel after acceptance, before purchase');
-select is((tests.wallet('tunde@relay.test')).available, 200000::bigint, 'advance clawed back from traveler');
+select is((tests.wallet('tunde@relay.test')).available - tests.base('tunde_available'), 0::bigint, 'advance clawed back from traveler');
 select tests.act_as(null);
 select is((select status from public.jobs where id = tests.get('j2')::uuid), 'cancelled'::public.job_status, 'job cancelled');
 
@@ -48,7 +49,7 @@ select is((select status from public.jobs where id = tests.get('j2')::uuid), 'ca
 select tests.act_as('tunde@relay.test');
 select tests.put('j3', (public.accept_job(tests.get('r3')::uuid)).id::text);
 select is((public.release_job(tests.get('j3')::uuid)).status, 'posted'::public.request_status, 'released request is posted again');
-select is((tests.wallet('tunde@relay.test')).available, 200000::bigint, 'advance returned on release');
+select is((tests.wallet('tunde@relay.test')).available - tests.base('tunde_available'), 0::bigint, 'advance returned on release');
 select isnt((public.accept_job(tests.get('r3')::uuid)).id::text, tests.get('j3'), 're-accepted as a new job');
 select tests.put('j3', (select id::text from public.jobs where request_id = tests.get('r3')::uuid and status = 'accepted'));
 
@@ -56,11 +57,11 @@ select tests.put('j3', (select id::text from public.jobs where request_id = test
 select tests.put('m1', (public.propose_substitute(tests.get('j3')::uuid, 'Carton is ₦2,500 now', 250000)).id::text);
 select tests.act_as('aisha@relay.test');
 select is((public.respond_substitute(tests.get('m1')::uuid, true)).decision, 'approved'::public.substitute_decision, 'requester approves');
-select is((tests.wallet('tunde@relay.test')).available, 450000::bigint, 'traveler advance topped up to ₦2,500');
+select is((tests.wallet('tunde@relay.test')).available - tests.base('tunde_available'), 250000::bigint, 'traveler advance topped up to ₦2,500');
 
 -- ════ Code lockout after 5 wrong tries → dispute → admin refund ════
 select tests.act_as('tunde@relay.test');
-select lives_ok(format($$select public.confirm_purchase(%L, 'p/r.jpg', 250000)$$, tests.get('j3')), 'purchased at new price');
+select lives_ok(format($$select public.confirm_purchase(%L, null, 250000)$$, tests.get('j3')), 'purchased at new price');
 select tests.act_as('aisha@relay.test');
 select tests.put('c3', (select code from public.job_handoff_codes where job_id = tests.get('j3')::uuid));
 select tests.put('bad', case when tests.get('c3') = '9999' then '0000' else '9999' end);
@@ -81,7 +82,7 @@ select tests.act_as('admin@relay.test');
 -- Escrow holds the fee only (₦300); refund it and claw back the ₦2,500 spent.
 select lives_ok(format($$select public.resolve_dispute(%L, 'refund', null, 250000, %L, 'No-show at handoff')$$,
   tests.get('d3'), tests.uid('tunde@relay.test')), 'admin refunds with clawback and strike');
-select is((tests.wallet('aisha@relay.test')).held, 125000::bigint, 'only the request in review is still held');
+select is((tests.wallet('aisha@relay.test')).held - tests.base('aisha_held'), 125000::bigint, 'only the request in review is still held');
 select tests.act_as(null);
 select is((select strikes from public.profiles where email = 'tunde@relay.test'), 1, 'strike recorded');
 select is((select status from public.jobs where id = tests.get('j3')::uuid), 'refunded'::public.job_status, 'job refunded');
@@ -111,7 +112,7 @@ select tests.act_as('tunde@relay.test');
 select tests.put('po', (public.request_withdrawal(100000)) ->> 'reference');
 select tests.act_as(null);
 select lives_ok(format($$select public.svc_settle_payout(%L, false, null, 'bank down')$$, tests.get('po')), 'failed payout settles');
-select is((tests.wallet('tunde@relay.test')).available, 200000::bigint, 'failed payout returns money');
+select is((tests.wallet('tunde@relay.test')).available - tests.base('tunde_available'), 0::bigint, 'failed payout returns money');
 
 select is_empty($$select * from private.reconcile_ledger()$$, 'ledger still balanced');
 

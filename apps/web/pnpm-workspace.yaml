@@ -3,3 +3,5 @@ allowBuilds:
   protobufjs: set this to true or false
   sharp: false
   unrs-resolver: false
+minimumReleaseAgeExclude:
+  - lucide-react@1.78.0

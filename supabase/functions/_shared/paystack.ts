@@ -3,6 +3,16 @@ import { AppError, requireEnv } from "./http.ts";
 
 const BASE = "https://api.paystack.co";
 
+/**
+ * Paystack rejects addresses on reserved test domains (seed users are @relay.test).
+ * Those get a stand-in on example.com; real student emails pass through unchanged.
+ */
+export function paystackEmail(email: string, profileId: string): string {
+  return /\.(test|local|localhost|invalid)$/i.test(email)
+    ? `${email.split("@")[0]}+${profileId.slice(0, 8)}@example.com`
+    : email;
+}
+
 type PaystackResponse<T> = { status: boolean; message: string; data: T };
 
 export async function paystack<T>(method: "GET" | "POST", path: string, body?: unknown): Promise<T> {

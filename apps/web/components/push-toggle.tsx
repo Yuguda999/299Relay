@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { Alert, Switch } from "@/components/ui";
 import { disablePush, enablePush, pushConfigured, pushEnabledHere } from "@/lib/push";
 
 const MESSAGES: Record<string, string> = {
@@ -19,7 +20,7 @@ export function PushToggle() {
   }, []);
 
   if (!pushConfigured()) {
-    return <p className="text-[12.5px] text-muted">Push notifications aren&apos;t set up yet. You&apos;ll still see everything in Notifications.</p>;
+    return <p className="text-[13px] leading-relaxed text-ink-2">Push notifications aren&apos;t set up yet. You&apos;ll still see everything in Notifications.</p>;
   }
 
   async function toggle(next: boolean) {
@@ -37,15 +38,10 @@ export function PushToggle() {
   }
 
   return (
-    <div className="flex flex-col gap-1.5">
-      <label className="flex items-start justify-between gap-4">
-        <span className="flex flex-col gap-0.5">
-          <span className="text-[14.5px] font-medium">Push notifications on this device</span>
-          <span className="text-[12.5px] text-muted">New matches on your route, acceptances, job updates and wallet events.</span>
-        </span>
-        <input type="checkbox" checked={on} disabled={busy} onChange={(e) => void toggle(e.target.checked)} className="mt-1 size-6 shrink-0 accent-navy" />
-      </label>
-      {error && <span className="text-[12.5px] text-danger">{error}</span>}
+    <div className="flex flex-col gap-3">
+      <Switch checked={on} disabled={busy} onChange={(v) => void toggle(v)}
+        label="Push notifications on this device" description="New matches on your route, acceptances, job updates and wallet events." />
+      <Alert tone="warn">{error}</Alert>
     </div>
   );
 }

@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState } from "react";
-import { supabase, type Views } from "@/lib/supabase/client";
+import { realtimeAuth, supabase, type Views } from "@/lib/supabase/client";
 
 export type PublicProfile = Views<"public_profiles">;
 
@@ -38,7 +38,11 @@ export async function compressImage(file: File, maxSide = 1280, quality = 0.78):
   const canvas = document.createElement("canvas");
   canvas.width = Math.round(bitmap.width * scale);
   canvas.height = Math.round(bitmap.height * scale);
-  canvas.getContext("2d")!.drawImage(bitmap, 0, 0, canvas.width, canvas.height);
+  const ctx = canvas.getContext("2d")!;
+  // JPEG has no alpha: paint white first so transparent PNGs don't turn black.
+  ctx.fillStyle = "white";
+  ctx.fillRect(0, 0, canvas.width, canvas.height);
+  ctx.drawImage(bitmap, 0, 0, canvas.width, canvas.height);
   bitmap.close();
   return new Promise((resolve, reject) =>
     canvas.toBlob((b) => (b ? resolve(b) : reject(new Error("compress_failed"))), "image/jpeg", quality),
@@ -117,12 +121,14 @@ export function useRealtime(key: string, tables: { table: string; filter?: strin
   });
   useEffect(() => {
     const db = supabase();
-    let ch = db.channel(`rt:${key}`);
+    let ch = db.channel(`rt:${key}:${crypto.randomUUID()}`);
     for (const t of tables) {
       ch = ch.on("postgres_changes", { event: "*", schema: "public", table: t.table, filter: t.filter }, () => cb.current());
     }
-    ch.subscribe();
+    let cancelled = false;
+    void realtimeAuth().then(() => !cancelled && ch.subscribe());
     return () => {
+      cancelled = true;
       void db.removeChannel(ch);
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps

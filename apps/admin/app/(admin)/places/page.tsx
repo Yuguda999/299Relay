@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import { PageTitle, Table } from "@/components/shell";
-import { Button, Card, ErrorNote, Field, Input, Pill, Select } from "@/components/ui";
+import { Alert, Button, Card, Checkbox, Dialog, Field, Input, MoneyInput, Select, StatusChip, TimeSelect, useNotify } from "@/components/ui";
 import { useAdmin } from "@/lib/admin";
 import { errorMessage } from "@/lib/errors";
 import { naira, toKobo } from "@/lib/format";
@@ -13,100 +13,104 @@ const blank = { name: "", kind: "gate" as Enums<"place_kind">, zone: "", is_hand
 
 export default function Places() {
   const { me, campus, places, reloadCampus } = useAdmin();
+  const { confirm, toast } = useNotify();
   const [form, setForm] = useState(blank);
   const [editing, setEditing] = useState<string | null>(null);
+  const [open, setOpen] = useState(false);
   const [error, setError] = useState<string | null>(null);
+
+  function edit(p?: Tables<"places">) {
+    setError(null);
+    setEditing(p?.id ?? null);
+    setForm(p ? { name: p.name, kind: p.kind, zone: p.zone, is_handoff_point: p.is_handoff_point } : blank);
+    setOpen(true);
+  }
 
   async function save() {
     setError(null);
     if (!form.name.trim() || !form.zone.trim()) return setError("Name and zone are required.");
     const db = supabase();
     const row = { ...form, name: form.name.trim(), zone: form.zone.trim().toLowerCase() };
-    const { error } = editing
-      ? await db.from("places").update(row).eq("id", editing)
-      : await db.from("places").insert({ ...row, campus_id: me.campus_id });
+    const { error } = editing ? await db.from("places").update(row).eq("id", editing) : await db.from("places").insert({ ...row, campus_id: me.campus_id });
     if (error) return setError(error.code === "23505" ? "A place with that name already exists." : errorMessage(error));
-    setForm(blank);
-    setEditing(null);
+    toast({ title: editing ? "Place updated" : "Place added" });
+    setOpen(false);
     void reloadCampus();
   }
 
   async function toggle(p: Tables<"places">) {
+    if (p.active && !(await confirm({ title: `Retire ${p.name}?`, body: "Students won't be able to pick it. Existing jobs keep it.", confirmLabel: "Retire", tone: "danger" }))) return;
     const { error } = await supabase().from("places").update({ active: !p.active }).eq("id", p.id);
-    if (error) return setError(errorMessage(error));
+    if (error) return toast({ title: "Not saved", body: errorMessage(error), tone: "critical" });
+    toast({ title: p.active ? "Place retired" : "Place restored" });
     void reloadCampus();
   }
 
   return (
     <>
-      <PageTitle title="Places and rules" sub="Students pick from this list. Handoffs only happen at handoff points." />
-      {campus && <CampusRules campus={campus} onSaved={() => void reloadCampus()} />}
-
-      <Card className="flex flex-col gap-3 p-5">
-        <h2 className="text-[15px] font-bold">{editing ? "Edit place" : "Add a place"}</h2>
-        <div className="grid gap-3 md:grid-cols-4">
-          <Field label="Name" htmlFor="pn"><Input id="pn" value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} /></Field>
-          <Field label="Kind" htmlFor="pk">
-            <Select id="pk" value={form.kind} onChange={(e) => setForm({ ...form, kind: e.target.value as Enums<"place_kind"> })}>
-              {KINDS.map((k) => <option key={k} value={k}>{k}</option>)}
-            </Select>
-          </Field>
-          <Field label="Zone" htmlFor="pz" hint="Same zone = cheaper fee"><Input id="pz" value={form.zone} onChange={(e) => setForm({ ...form, zone: e.target.value })} /></Field>
-          <label className="flex items-center gap-2 self-center pt-5 text-[14px] font-medium">
-            <input type="checkbox" checked={form.is_handoff_point} onChange={(e) => setForm({ ...form, is_handoff_point: e.target.checked })} className="size-5 accent-navy" />
-            Public handoff point
-          </label>
-        </div>
-        <ErrorNote>{error}</ErrorNote>
-        <div className="flex gap-2">
-          <Button size="md" onClick={save}>{editing ? "Save changes" : "Add place"}</Button>
-          {editing && <Button size="md" variant="outline" onClick={() => { setEditing(null); setForm(blank); }}>Cancel</Button>}
-        </div>
-      </Card>
-
+      <PageTitle title="Places and rules" sub="Students pick from this list. Handoffs only happen at handoff points." right={<Button size="pill" onClick={() => edit()}>Add place</Button>} />
+      {campus && <CampusRules key={campus.updated_at} campus={campus} onSaved={() => void reloadCampus()} />}
       <Table head={["Name", "Kind", "Zone", "Handoff point", "Status", ""]}>
         {places.map((p) => (
-          <tr key={p.id} className={p.active ? "" : "opacity-50"}>
-            <td className="px-4 py-3 font-semibold">{p.name}</td>
-            <td className="px-4 py-3">{p.kind}</td>
-            <td className="px-4 py-3">{p.zone}</td>
-            <td className="px-4 py-3">{p.is_handoff_point ? <Pill tone="success">Yes</Pill> : "—"}</td>
-            <td className="px-4 py-3">{p.active ? "Active" : "Retired"}</td>
-            <td className="flex gap-2 px-4 py-3">
-              <Button size="md" variant="soft" onClick={() => { setEditing(p.id); setForm({ name: p.name, kind: p.kind, zone: p.zone, is_handoff_point: p.is_handoff_point }); }}>Edit</Button>
-              <Button size="md" variant="outline" onClick={() => toggle(p)}>{p.active ? "Retire" : "Restore"}</Button>
+          <tr key={p.id} className={p.active ? "" : "opacity-55"}>
+            <td className="font-semibold">{p.name}</td>
+            <td className="capitalize text-ink-2">{p.kind}</td>
+            <td className="font-mono text-[12px]">{p.zone}</td>
+            <td>{p.is_handoff_point ? <StatusChip tone="ok">Handoff</StatusChip> : <span className="text-ink-3">—</span>}</td>
+            <td><StatusChip tone={p.active ? "live" : "muted"}>{p.active ? "Active" : "Retired"}</StatusChip></td>
+            <td className="text-right whitespace-nowrap">
+              <Button size="sm" variant="ghost" onClick={() => edit(p)}>Edit</Button>
+              <Button size="sm" variant="ghost" onClick={() => toggle(p)}>{p.active ? "Retire" : "Restore"}</Button>
             </td>
           </tr>
         ))}
       </Table>
+
+      <Dialog open={open} onClose={() => setOpen(false)} title={editing ? "Edit place" : "Add a place"} size="md"
+        footer={<><Button variant="surface" size="pill" onClick={() => setOpen(false)}>Cancel</Button><Button size="pill" onClick={save}>{editing ? "Save changes" : "Add place"}</Button></>}>
+        <div className="flex flex-col gap-4">
+          <Field label="Name" htmlFor="pn"><Input id="pn" data-autofocus value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} /></Field>
+          <div className="grid grid-cols-2 gap-3">
+            <Field label="Kind" labelId="pk-l">
+              <Select aria-labelledby="pk-l" value={form.kind} onChange={(v) => setForm({ ...form, kind: v })} options={KINDS.map((k) => ({ value: k, label: k[0]!.toUpperCase() + k.slice(1) }))} />
+            </Field>
+            <Field label="Zone" htmlFor="pz" hint="Same zone = cheaper fee"><Input id="pz" value={form.zone} onChange={(e) => setForm({ ...form, zone: e.target.value })} /></Field>
+          </div>
+          <Checkbox checked={form.is_handoff_point} onChange={(v) => setForm({ ...form, is_handoff_point: v })}>Public handoff point (gate, porters&apos; lodge, faculty entrance)</Checkbox>
+          <Alert tone="critical">{error}</Alert>
+        </div>
+      </Dialog>
     </>
   );
 }
 
 function CampusRules({ campus, onSaved }: { campus: Tables<"campuses">; onSaved: () => void }) {
+  const { toast } = useNotify();
   const [curfew, setCurfew] = useState(campus.handoff_curfew.slice(0, 5));
   const [capNew, setCapNew] = useState(String(campus.item_cap_new / 100));
   const [capTrusted, setCapTrusted] = useState(String(campus.item_cap_trusted / 100));
-  const [msg, setMsg] = useState<string | null>(null);
+  const [error, setError] = useState<string | null>(null);
 
   async function save() {
     const a = toKobo(capNew), b = toKobo(capTrusted);
-    if (!a || !b) return setMsg("Enter both caps.");
+    if (!a || !b) return setError("Enter both caps.");
+    setError(null);
     const { error } = await supabase().rpc("admin_update_campus", { p_curfew: curfew, p_item_cap_new: a, p_item_cap_trusted: b });
-    if (error) return setMsg(errorMessage(error));
-    setMsg("Saved.");
+    if (error) return setError(errorMessage(error));
+    toast({ title: "Campus rules saved" });
     onSaved();
   }
 
   return (
-    <Card className="flex flex-col gap-3 p-5">
-      <h2 className="text-[15px] font-bold">{campus.name}</h2>
-      <div className="grid gap-3 md:grid-cols-4">
-        <Field label="No handoffs after" htmlFor="cf"><Input id="cf" type="time" value={curfew} onChange={(e) => { setCurfew(e.target.value); setMsg(null); }} /></Field>
-        <Field label="Item cap, new users (₦)" htmlFor="c1" hint={`Now ${naira(campus.item_cap_new)}`}><Input id="c1" inputMode="decimal" value={capNew} onChange={(e) => { setCapNew(e.target.value); setMsg(null); }} /></Field>
-        <Field label="Item cap, trusted (₦)" htmlFor="c2" hint="10+ jobs, rating ≥ 4.5"><Input id="c2" inputMode="decimal" value={capTrusted} onChange={(e) => { setCapTrusted(e.target.value); setMsg(null); }} /></Field>
-        <div className="flex items-end gap-3 pb-1"><Button size="md" onClick={save}>Save rules</Button>{msg && <span className="text-[13px] text-muted">{msg}</span>}</div>
+    <Card className="flex flex-col gap-4 p-5">
+      <h2 className="font-display text-[17px] font-semibold tracking-[-0.01em]">{campus.name}</h2>
+      <div className="grid gap-4 md:grid-cols-3">
+        <Field label="No handoffs after" labelId="cf-l"><TimeSelect aria-labelledby="cf-l" value={curfew} onChange={setCurfew} min="17:00" max="23:00" step={30} /></Field>
+        <Field label="Item cap, new users" htmlFor="c1" hint={<>Now <span className="tabular">{naira(campus.item_cap_new)}</span></>}><MoneyInput id="c1" value={capNew} onChange={(e) => setCapNew(e.target.value)} /></Field>
+        <Field label="Item cap, trusted" htmlFor="c2" hint="10+ jobs and rating ≥ 4.5"><MoneyInput id="c2" value={capTrusted} onChange={(e) => setCapTrusted(e.target.value)} /></Field>
       </div>
+      <Alert tone="critical">{error}</Alert>
+      <Button size="pill" variant="inverse" className="self-end" onClick={save}>Save rules</Button>
     </Card>
   );
 }

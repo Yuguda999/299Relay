@@ -72,11 +72,20 @@ Seed logins (password `relay-test-123`): `admin@relay.test`, `aisha@relay.test` 
 | `dispatch-notification` | Push (FCM) + email (Resend) for each new notification row |
 | `maintenance` | Hourly (pg_cron): deletes ID photos 30 days after review; re-checks payouts pending over an hour with Paystack, settles them or alerts admins once |
 
+## Design system
+
+Both apps use the **Relay** skin, built on the Vxrcel/Raven token vocabulary (`vxrcel-ui-design`, `references/new-skin.md`): light-first, round, flat, navy ink, one orange signal, with a **Relay Night** dark theme. Contrast pairs were checked against the skill's targets (ratios are commented next to the tokens).
+
+- Tokens: `apps/web/app/globals.css` (`:root` and `.dark`). Components use roles (`bg-sheet`, `text-ink-2`, `bg-signal-soft`), never hex values.
+- Type: Geist (body), Geist Mono (data, readouts), Montserrat (display, brand face). Numbers use `tabular`.
+- Motion: `motion` with one spring for every sliding indicator (`lib/motion.ts`); reduced motion is handled in CSS, in `MotionConfig`, and per effect.
+- Primitives in `components/ui/`, all custom: `Select` (searchable combobox, keyboard and screen-reader support), `TimeSelect`, `Checkbox`, `Switch`, `SearchInput`, `Dialog` (bottom sheet on phones), `useNotify().confirm` and `.toast`, `Alert`, `StatusChip`, `PillTabs`, `ChoiceChips`, `EmptyState`, skeletons. No native `<select>`, checkbox, time input, `alert()` or `confirm()`; forms use `noValidate` so the browser never shows its own bubbles.
+- `apps/web` owns the design system; run `scripts/sync-ui.sh` to copy it into `apps/admin`.
+
 ## Admin dashboard (apps/admin)
 
 - Same stack and login as the student app; non-admins are signed out. Reads go through RLS (`is_admin()`), decisions through the admin RPCs, which write `admin_audit`.
 - Overview shows the PRD pilot metrics against their targets (`admin_metrics`) and ledger health (`admin_ledger_health`).
-- `components/ui.tsx`, `icons.tsx` and `lib/format.ts`, `errors.ts`, `database.types.ts` are copied from `apps/web`; move them to a shared package if they start to drift.
 
 ## Decisions made while building
 

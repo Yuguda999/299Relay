@@ -9,8 +9,8 @@ select throws_ok($$insert into public.places (campus_id, name, kind, zone) value
   '42501', null, 'students cannot add places');
 
 select tests.act_as('admin@relay.test');
-select is((public.admin_metrics() ->> 'verified_users')::int, 3, 'metrics count verified users');
-select is((public.admin_metrics() ->> 'pending_verifications')::int, 1, 'metrics count pending IDs');
+select is((public.admin_metrics() ->> 'verified_users')::bigint, (select count(*) from public.profiles where status = 'verified'), 'metrics count verified users');
+select is((public.admin_metrics() ->> 'pending_verifications')::bigint, (select count(*) from public.verifications where status = 'submitted'), 'metrics count pending IDs');
 select is(jsonb_array_length(public.admin_ledger_health() -> 'problems'), 0, 'ledger healthy');
 select lives_ok($$insert into public.places (campus_id, name, kind, zone, is_handoff_point)
   values (public.my_campus(), 'Kongo Gate', 'gate', 'kongo', true)$$, 'admin adds a place');
