@@ -70,6 +70,7 @@ Seed logins (password `relay-test-123`): `admin@relay.test`, `aisha@relay.test` 
 | `bank-account` | GET bank list; POST resolves account name, must match verified name |
 | `withdraw` | Moves money to in-transit, starts Paystack transfer, reverses on refusal |
 | `dispatch-notification` | Push (FCM) + email (Resend) for each new notification row |
+| `maintenance` | Hourly (pg_cron): deletes ID photos 30 days after review; re-checks payouts pending over an hour with Paystack, settles them or alerts admins once |
 
 ## Admin dashboard (apps/admin)
 
@@ -88,9 +89,7 @@ Seed logins (password `relay-test-123`): `admin@relay.test`, `aisha@relay.test` 
 ## Known gaps
 
 - If a traveler has withdrawn their purchase advance, returning unused budget or cancelling fails with `insufficient_funds` / `advance_spent`; the job then needs a dispute. Revisit with the "advance vs reimbursement" open question.
-- ID photos are not yet auto-deleted 30 days after a decision (needs a scheduled function using the Storage API).
-- Payouts stuck in `pending` (network failure after the transfer call) need the monitoring job from the architecture doc.
-- Web push needs the Firebase web SDK and a VAPID key; devices are not registered from the PWA yet.
+- Web push is wired (Settings toggle → FCM token → `register_device`) but hidden until the `NEXT_PUBLIC_FIREBASE_*` values in `apps/web/.env.example` are set; it has not been tested against a real Firebase project.
 - Women-only matching is stored but not yet applied in matching.
 - In-app account deletion is not built.
-- Production: set Vault secrets `project_url` and `service_role_key` so the notification trigger can reach `dispatch-notification`.
+- Production: set Vault secrets `project_url` and `service_role_key` so pg_cron and the notification trigger can reach `maintenance` and `dispatch-notification`.

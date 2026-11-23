@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { PushToggle } from "@/components/push-toggle";
 import { Button, Card, ErrorNote, Field, Header, Input, Notice, Page } from "@/components/ui";
 import { errorMessage } from "@/lib/errors";
 import { useSession } from "@/lib/session";
@@ -25,6 +26,10 @@ export default function Settings() {
     <>
       <Header title="Settings and safety" />
       <Page className="gap-4">
+        <Card className="flex flex-col gap-3">
+          <h2 className="text-[15px] font-bold">Notifications</h2>
+          <PushToggle />
+        </Card>
         <Card className="flex flex-col gap-3">
           <h2 className="text-[15px] font-bold">Safety</h2>
           <label className="flex items-start justify-between gap-4">

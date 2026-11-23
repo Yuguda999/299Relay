@@ -51,5 +51,5 @@ function redirectTo(request: NextRequest, path: string, carry: NextResponse) {
 }
 
 export const config = {
-  matcher: ["/((?!_next/static|_next/image|brand/|sw.js|manifest.webmanifest|offline.html|favicon.ico).*)"],
+  matcher: ["/((?!_next/static|_next/image|brand/|sw.js|firebase-messaging-sw.js|manifest.webmanifest|offline.html|favicon.ico).*)"],
 };
