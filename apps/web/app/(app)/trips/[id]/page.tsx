@@ -12,9 +12,8 @@ import { supabase } from "@/lib/supabase/client";
 
 export default function TripDetail() {
   const { id } = useParams<{ id: string }>();
-  const { profile, places } = useSession();
+  const { profile, placeName } = useSession();
   const { confirm, toast } = useNotify();
-  const placeName = (pid: string | null) => places.find((p) => p.id === pid)?.name ?? "";
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
 

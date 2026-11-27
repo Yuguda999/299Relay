@@ -18,9 +18,8 @@ const LIVE = ["accepted", "purchased", "in_transit"];
 
 export default function JobPage() {
   const { id } = useParams<{ id: string }>();
-  const { profile, places, refresh } = useSession();
+  const { profile, placeName, refresh } = useSession();
   const { confirm, toast } = useNotify();
-  const placeName = (pid: string | null) => places.find((p) => p.id === pid)?.name ?? "";
 
   const q = useLoad(async () => {
     const db = supabase();

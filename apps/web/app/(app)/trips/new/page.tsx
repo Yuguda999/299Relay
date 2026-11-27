@@ -3,18 +3,16 @@
 import { useRouter } from "next/navigation";
 import { useState } from "react";
 import { VerifiedOnly } from "@/components/gate";
-import { placeOptions } from "@/components/request-form";
-import { Alert, Button, ChoiceChips, Field, Footer, Header, Page, Select, Textarea, TimeSelect } from "@/components/ui";
+import { PlaceSelect } from "@/components/place-select";
+import { Alert, Button, ChoiceChips, Field, Footer, Header, Page, Textarea, TimeSelect } from "@/components/ui";
 import { errorMessage } from "@/lib/errors";
 import { lagosToIso, TYPE_LABEL } from "@/lib/format";
-import { useSession } from "@/lib/session";
 import { supabase, type Enums } from "@/lib/supabase/client";
 
 const ALL: Enums<"request_type">[] = ["buy", "print", "pick_up", "drop_off"];
 
 export default function PostTrip() {
   const router = useRouter();
-  const { places } = useSession();
   const [from, setFrom] = useState("");
   const [to, setTo] = useState("");
   const [day, setDay] = useState<"0" | "1">("0");
@@ -25,7 +23,6 @@ export default function PostTrip() {
   const [note, setNote] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
-  const opts = placeOptions(places);
 
   async function submit(e: React.FormEvent) {
     e.preventDefault();
@@ -51,10 +48,10 @@ export default function PostTrip() {
         <Header title="Post a trip" />
         <Page className="gap-4">
           <Field label="Leaving from" labelId="from-l">
-            <Select aria-labelledby="from-l" value={from} onChange={setFrom} options={opts} placeholder="Choose a place" searchPlaceholder="Search places" />
+            <PlaceSelect labelledBy="from-l" value={from} onChange={setFrom} exclude={to} />
           </Field>
           <Field label="Going to" labelId="to-l">
-            <Select aria-labelledby="to-l" value={to} onChange={setTo} options={opts.map((o) => ({ ...o, disabled: o.value === from }))} placeholder="Choose a place" searchPlaceholder="Search places" />
+            <PlaceSelect labelledBy="to-l" value={to} onChange={setTo} exclude={from} />
           </Field>
           <Field label="Day" labelId="day-l">
             <ChoiceChips aria-label="Day" value={day} onChange={setDay} columns={2} options={[{ value: "0", label: "Today" }, { value: "1", label: "Tomorrow" }]} />

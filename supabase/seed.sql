@@ -6,7 +6,8 @@
 --   bello@relay.test   — pending (ID not yet reviewed)
 
 insert into public.campuses (id, name, short_name, timezone, handoff_curfew)
-values ('00000000-0000-4000-a000-000000000001', 'Ahmadu Bello University, Zaria', 'ABU', 'Africa/Lagos', '21:00');
+values ('00000000-0000-4000-a000-000000000001', 'Ahmadu Bello University, Zaria', 'ABU', 'Africa/Lagos', '21:00')
+on conflict (id) do nothing;
 
 insert into public.places (campus_id, name, kind, zone, is_handoff_point) values
   ('00000000-0000-4000-a000-000000000001', 'Samaru Market',            'market',  'samaru',    false),

@@ -14,9 +14,8 @@ const ACTIVE = ["accepted", "purchased", "in_transit", "disputed"];
 const TONE: Record<string, ChipTone> = { completed: "ok", disputed: "critical", refunded: "muted", accepted: "live", purchased: "live", in_transit: "live" };
 
 export default function MyJobs() {
-  const { profile, places } = useSession();
+  const { profile, placeName } = useSession();
   const [tab, setTab] = useState<Tab>("active");
-  const placeName = (id: string | null) => places.find((p) => p.id === id)?.name ?? "";
   const me = profile?.id ?? "";
 
   const q = useLoad(async () => {

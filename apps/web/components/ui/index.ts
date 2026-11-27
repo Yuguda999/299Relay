@@ -4,6 +4,6 @@ export { Checkbox, Field, Input, Kbd, MoneyInput, SearchInput, Switch, Textarea,
 export { Avatar, Card, Dot, Footer, Header, LinkRow, Page, Row, SectionLabel, Tile } from "./layout";
 export { NotifyProvider, useNotify } from "./notify";
 export { Dialog, Portal } from "./overlay";
-export { Select, TimeSelect, type Option } from "./select";
+export { Select, TimeSelect, type CreateOption, type Option } from "./select";
 export { ChoiceChips, PillTabs } from "./tabs";
 export { cn } from "@/lib/cn";

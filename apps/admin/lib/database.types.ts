@@ -916,38 +916,51 @@ export type Database = {
       places: {
         Row: {
           active: boolean;
+          added_by: string | null;
           campus_id: string;
           created_at: string;
           id: string;
           is_handoff_point: boolean;
           kind: Database["public"]["Enums"]["place_kind"];
           name: string;
+          reviewed_at: string | null;
           updated_at: string;
           zone: string;
         };
         Insert: {
           active?: boolean;
+          added_by?: string | null;
           campus_id: string;
           created_at?: string;
           id?: string;
           is_handoff_point?: boolean;
           kind: Database["public"]["Enums"]["place_kind"];
           name: string;
+          reviewed_at?: string | null;
           updated_at?: string;
           zone: string;
         };
         Update: {
           active?: boolean;
+          added_by?: string | null;
           campus_id?: string;
           created_at?: string;
           id?: string;
           is_handoff_point?: boolean;
           kind?: Database["public"]["Enums"]["place_kind"];
           name?: string;
+          reviewed_at?: string | null;
           updated_at?: string;
           zone?: string;
         };
         Relationships: [
+          {
+            foreignKeyName: "places_added_by_fkey";
+            columns: ["added_by"];
+            isOneToOne: false;
+            referencedRelation: "profiles";
+            referencedColumns: ["id"];
+          },
           {
             foreignKeyName: "places_campus_id_fkey";
             columns: ["campus_id"];
@@ -1520,6 +1533,28 @@ export type Database = {
       };
     };
     Functions: {
+      add_place: {
+        Args: { p_name: string; p_off_campus?: boolean };
+        Returns: {
+          active: boolean;
+          added_by: string | null;
+          campus_id: string;
+          created_at: string;
+          id: string;
+          is_handoff_point: boolean;
+          kind: Database["public"]["Enums"]["place_kind"];
+          name: string;
+          reviewed_at: string | null;
+          updated_at: string;
+          zone: string;
+        };
+        SetofOptions: {
+          from: "*";
+          to: "places";
+          isOneToOne: true;
+          isSetofReturn: false;
+        };
+      };
       accept_job: {
         Args: { p_request: string; p_trip?: string };
         Returns: {
@@ -2214,7 +2249,7 @@ export type Database = {
       message_kind: "text" | "photo" | "substitute" | "system";
       payment_status: "pending" | "success" | "failed";
       payout_status: "pending" | "success" | "failed" | "reversed";
-      place_kind: "market" | "gate" | "hostel" | "faculty" | "office" | "other";
+      place_kind: "market" | "gate" | "hostel" | "faculty" | "office" | "other" | "area";
       profile_status: "pending" | "verified" | "suspended";
       request_status: "review" | "posted" | "accepted" | "completed" | "cancelled" | "expired";
       request_type: "buy" | "pick_up" | "drop_off" | "print";
@@ -2362,7 +2397,7 @@ export const Constants = {
       message_kind: ["text", "photo", "substitute", "system"],
       payment_status: ["pending", "success", "failed"],
       payout_status: ["pending", "success", "failed", "reversed"],
-      place_kind: ["market", "gate", "hostel", "faculty", "office", "other"],
+      place_kind: ["market", "gate", "hostel", "faculty", "office", "other", "area"],
       profile_status: ["pending", "verified", "suspended"],
       request_status: ["review", "posted", "accepted", "completed", "cancelled", "expired"],
       request_type: ["buy", "pick_up", "drop_off", "print"],

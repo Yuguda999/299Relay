@@ -1,6 +1,6 @@
 "use client";
 
-import { createContext, useCallback, useContext, useEffect, useRef, useState, type ReactNode } from "react";
+import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { usePathname, useRouter } from "next/navigation";
 import { useNotify } from "@/components/ui";
 import { realtimeAuth, supabase, type Tables } from "@/lib/supabase/client";
@@ -9,7 +9,12 @@ type Session = {
   profile: Tables<"profiles"> | null;
   wallet: Tables<"wallets"> | null;
   unread: number;
+  /** Active places, for pickers. */
   places: Tables<"places">[];
+  /** Name of any place, including retired ones on old jobs. */
+  placeName: (id: string | null | undefined) => string;
+  /** Add a place a student typed in; returns the new (or existing) place. */
+  addPlace: (name: string, offCampus: boolean) => Promise<Tables<"places">>;
   loading: boolean;
   refresh: () => Promise<void>;
   signOut: () => Promise<void>;
@@ -27,7 +32,7 @@ export function SessionProvider({ children }: { children: ReactNode }) {
   useEffect(() => {
     pathRef.current = path;
   }, [path]);
-  const [state, setState] = useState<Omit<Session, "refresh" | "signOut">>({
+  const [state, setState] = useState<Omit<Session, "refresh" | "signOut" | "placeName" | "addPlace">>({
     profile: null, wallet: null, unread: 0, places: [], loading: true,
   });
 
@@ -43,7 +48,7 @@ export function SessionProvider({ children }: { children: ReactNode }) {
       db.from("profiles").select("*").eq("id", uid).single(),
       db.from("wallets").select("*").eq("profile_id", uid).single(),
       db.from("notifications").select("id", { count: "exact", head: true }).is("read_at", null),
-      db.from("places").select("*").eq("active", true).order("name"),
+      db.from("places").select("*").order("name"),
     ]);
     setState({
       profile: profile.data,
@@ -63,6 +68,11 @@ export function SessionProvider({ children }: { children: ReactNode }) {
       .channel(`session:${crypto.randomUUID()}`) // unique per mount: a reused name can bind to the closing channel
       .on("postgres_changes", { event: "*", schema: "public", table: "wallets" }, (p) => {
         setState((s) => ({ ...s, wallet: p.new as Tables<"wallets"> }));
+      })
+      // Places other students add (or the team edits) show up without a reload.
+      .on("postgres_changes", { event: "*", schema: "public", table: "places" }, (p) => {
+        if (p.eventType === "DELETE") return;
+        setState((s) => ({ ...s, places: upsertPlace(s.places, p.new as Tables<"places">) }));
       })
       .on("postgres_changes", { event: "INSERT", schema: "public", table: "notifications" }, (p) => {
         const n = p.new as Tables<"notifications">;
@@ -104,7 +114,29 @@ export function SessionProvider({ children }: { children: ReactNode }) {
     router.refresh();
   }, [router]);
 
-  return <Ctx.Provider value={{ ...state, refresh, signOut }}>{children}</Ctx.Provider>;
+  const addPlace = useCallback(async (name: string, offCampus: boolean) => {
+    const { data, error } = await supabase().rpc("add_place", { p_name: name, p_off_campus: offCampus });
+    if (error) throw error;
+    setState((s) => ({ ...s, places: upsertPlace(s.places, data) }));
+    return data;
+  }, []);
+
+  const value = useMemo(() => {
+    const byId = new Map(state.places.map((p) => [p.id, p]));
+    return {
+      ...state,
+      places: state.places.filter((p) => p.active),
+      placeName: (id: string | null | undefined) => (id && byId.get(id)?.name) || "",
+      addPlace, refresh, signOut,
+    };
+  }, [state, addPlace, refresh, signOut]);
+
+  return <Ctx.Provider value={value}>{children}</Ctx.Provider>;
+}
+
+function upsertPlace(list: Tables<"places">[], p: Tables<"places">) {
+  const rest = list.filter((x) => x.id !== p.id);
+  return [...rest, p].sort((a, b) => a.name.localeCompare(b.name));
 }
 
 export function useSession(): Session {

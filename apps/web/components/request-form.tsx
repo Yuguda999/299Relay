@@ -5,7 +5,8 @@ import { useEffect, useMemo, useState } from "react";
 import { PhotoPicker } from "@/components/app-bits";
 import { DocumentPicker } from "@/components/print";
 import { Icon } from "@/components/icons";
-import { Alert, Button, ChoiceChips, Field, Footer, Header, MoneyInput, Page, Row, Select, Textarea, TimeSelect, type Option } from "@/components/ui";
+import { PlaceSelect } from "@/components/place-select";
+import { Alert, Button, ChoiceChips, Field, Footer, Header, MoneyInput, Page, Row, Textarea, TimeSelect } from "@/components/ui";
 import { uploadPhoto } from "@/lib/data";
 import { errorMessage } from "@/lib/errors";
 import { isPurchase, lagosToIso, naira, toKobo, TYPE_LABEL } from "@/lib/format";
@@ -14,14 +15,6 @@ import { useSession } from "@/lib/session";
 import { supabase, type Enums, type Tables } from "@/lib/supabase/client";
 
 type When = "hour" | "today" | "tomorrow";
-const KIND_GROUP: Record<string, string> = { market: "Markets", gate: "Gates", hostel: "Hostels", faculty: "Faculties", office: "Offices", other: "Other" };
-
-export function placeOptions(places: Tables<"places">[], onlyHandoff = false): Option[] {
-  return places
-    .filter((p) => !onlyHandoff || p.is_handoff_point)
-    .sort((a, b) => (KIND_GROUP[a.kind]! + a.name).localeCompare(KIND_GROUP[b.kind]! + b.name))
-    .map((p) => ({ value: p.id, label: p.name, group: KIND_GROUP[p.kind], hint: p.is_handoff_point ? "Handoff point" : undefined }));
-}
 
 export function RequestForm({ trip }: { trip?: Tables<"trips"> | null }) {
   const router = useRouter();
@@ -144,10 +137,10 @@ export function RequestForm({ trip }: { trip?: Tables<"trips"> | null }) {
         )}
 
         <Field label={fromLabel} labelId="from-l">
-          <Select aria-labelledby="from-l" value={from} onChange={setFrom} options={placeOptions(places)} searchPlaceholder="Search places" />
+          <PlaceSelect labelledBy="from-l" value={from} onChange={setFrom} />
         </Field>
         <Field label="Hand it to me at" labelId="to-l" hint="Public handoff points only: gates, porters' lodges, faculty entrances.">
-          <Select aria-labelledby="to-l" value={to} onChange={setTo} options={placeOptions(places, true)} searchPlaceholder="Search handoff points" />
+          <PlaceSelect labelledBy="to-l" value={to} onChange={setTo} onlyHandoff />
         </Field>
 
         {type === "buy" && (

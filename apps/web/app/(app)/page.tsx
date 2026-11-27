@@ -14,9 +14,8 @@ import { supabase } from "@/lib/supabase/client";
 type Tab = "trips" | "requests";
 
 export default function Home() {
-  const { wallet, unread, profile, places } = useSession();
+  const { wallet, unread, profile, placeName } = useSession();
   const [tab, setTab] = useState<Tab>("trips");
-  const placeName = (id: string | null) => places.find((p) => p.id === id)?.name ?? "";
 
   const feed = useLoad(async () => {
     const db = supabase();

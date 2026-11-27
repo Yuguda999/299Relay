@@ -8,7 +8,10 @@ import { errorMessage } from "@/lib/errors";
 import { naira, toKobo } from "@/lib/format";
 import { supabase, type Enums, type Tables } from "@/lib/supabase/client";
 
-const KINDS: Enums<"place_kind">[] = ["market", "gate", "hostel", "faculty", "office", "other"];
+const KINDS: Enums<"place_kind">[] = ["hostel", "gate", "faculty", "office", "market", "area", "other"];
+const KIND_LABEL: Record<Enums<"place_kind">, string> = {
+  hostel: "Hostel", gate: "Gate", faculty: "Faculty", office: "Office", market: "Market", area: "Around Zaria", other: "Other",
+};
 const blank = { name: "", kind: "gate" as Enums<"place_kind">, zone: "", is_handoff_point: true };
 
 export default function Places() {
@@ -18,6 +21,9 @@ export default function Places() {
   const [editing, setEditing] = useState<string | null>(null);
   const [open, setOpen] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  // Student-added places waiting for a look go first.
+  const toReview = places.filter((p) => p.added_by && !p.reviewed_at && p.active);
+  const sorted = [...toReview, ...places.filter((p) => !toReview.includes(p))];
 
   function edit(p?: Tables<"places">) {
     setError(null);
@@ -30,11 +36,19 @@ export default function Places() {
     setError(null);
     if (!form.name.trim() || !form.zone.trim()) return setError("Name and zone are required.");
     const db = supabase();
-    const row = { ...form, name: form.name.trim(), zone: form.zone.trim().toLowerCase() };
+    // Editing a student-added place counts as reviewing it.
+    const row = { ...form, name: form.name.trim(), zone: form.zone.trim().toLowerCase(), ...(editing ? { reviewed_at: new Date().toISOString() } : {}) };
     const { error } = editing ? await db.from("places").update(row).eq("id", editing) : await db.from("places").insert({ ...row, campus_id: me.campus_id });
     if (error) return setError(error.code === "23505" ? "A place with that name already exists." : errorMessage(error));
     toast({ title: editing ? "Place updated" : "Place added" });
     setOpen(false);
+    void reloadCampus();
+  }
+
+  async function review(p: Tables<"places">) {
+    const { error } = await supabase().from("places").update({ reviewed_at: new Date().toISOString() }).eq("id", p.id);
+    if (error) return toast({ title: "Not saved", body: errorMessage(error), tone: "critical" });
+    toast({ title: `${p.name} kept` });
     void reloadCampus();
   }
 
@@ -50,15 +64,24 @@ export default function Places() {
     <>
       <PageTitle title="Places and rules" sub="Students pick from this list. Handoffs only happen at handoff points." right={<Button size="pill" onClick={() => edit()}>Add place</Button>} />
       {campus && <CampusRules key={campus.updated_at} campus={campus} onSaved={() => void reloadCampus()} />}
+      {toReview.length > 0 && (
+        <Alert tone="info">
+          {toReview.length} {toReview.length === 1 ? "place was" : "places were"} added by students. Keep, edit or retire them below.
+        </Alert>
+      )}
       <Table head={["Name", "Kind", "Zone", "Handoff point", "Status", ""]}>
-        {places.map((p) => (
+        {sorted.map((p) => (
           <tr key={p.id} className={p.active ? "" : "opacity-55"}>
-            <td className="font-semibold">{p.name}</td>
-            <td className="capitalize text-ink-2">{p.kind}</td>
+            <td className="font-semibold">
+              {p.name}
+              {p.added_by && !p.reviewed_at && <StatusChip tone="warn" className="ml-2">Added by student</StatusChip>}
+            </td>
+            <td className="text-ink-2">{KIND_LABEL[p.kind]}</td>
             <td className="font-mono text-[12px]">{p.zone}</td>
             <td>{p.is_handoff_point ? <StatusChip tone="ok">Handoff</StatusChip> : <span className="text-ink-3">—</span>}</td>
             <td><StatusChip tone={p.active ? "live" : "muted"}>{p.active ? "Active" : "Retired"}</StatusChip></td>
             <td className="text-right whitespace-nowrap">
+              {p.added_by && !p.reviewed_at && p.active && <Button size="sm" variant="ghost" onClick={() => review(p)}>Keep</Button>}
               <Button size="sm" variant="ghost" onClick={() => edit(p)}>Edit</Button>
               <Button size="sm" variant="ghost" onClick={() => toggle(p)}>{p.active ? "Retire" : "Restore"}</Button>
             </td>
@@ -72,7 +95,7 @@ export default function Places() {
           <Field label="Name" htmlFor="pn"><Input id="pn" data-autofocus value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} /></Field>
           <div className="grid grid-cols-2 gap-3">
             <Field label="Kind" labelId="pk-l">
-              <Select aria-labelledby="pk-l" value={form.kind} onChange={(v) => setForm({ ...form, kind: v })} options={KINDS.map((k) => ({ value: k, label: k[0]!.toUpperCase() + k.slice(1) }))} />
+              <Select aria-labelledby="pk-l" value={form.kind} onChange={(v) => setForm({ ...form, kind: v })} options={KINDS.map((k) => ({ value: k, label: KIND_LABEL[k] }))} />
             </Field>
             <Field label="Zone" htmlFor="pz" hint="Same zone = cheaper fee"><Input id="pz" value={form.zone} onChange={(e) => setForm({ ...form, zone: e.target.value })} /></Field>
           </div>
