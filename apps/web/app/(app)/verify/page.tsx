@@ -4,7 +4,7 @@ import Link from "next/link";
 import { useState } from "react";
 import { PhotoPicker } from "@/components/app-bits";
 import { Icon } from "@/components/icons";
-import { Button, ButtonLink, ErrorNote, Field, Footer, Header, Input, Loading, Notice, Page, Pill } from "@/components/ui";
+import { Alert, Button, ButtonLink, Field, Footer, Header, Input, Loading, Page, StatusChip, cn } from "@/components/ui";
 import { uploadPhoto, useLoad } from "@/lib/data";
 import { errorMessage } from "@/lib/errors";
 import { ago } from "@/lib/format";
@@ -25,24 +25,27 @@ export default function Verify() {
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
 
-  if (!profile || latest.loading) return <Loading />;
+  if (!profile || latest.loading) return <><Header title="Student ID" back="/" /><Page><Loading /></Page></>;
 
-  // Already verified, or waiting for review: status screen.
   if (profile.status === "verified" || latest.data?.status === "submitted") {
     const ok = profile.status === "verified";
     return (
       <div className="flex min-h-dvh flex-col">
         <Header title={ok ? "Student ID" : "ID in review"} subtitle={ok ? undefined : "Step 3 of 3"} back="/" />
-        <Page className="items-center gap-4 pt-8 text-center">
-          <span className={`flex size-20 items-center justify-center rounded-full ${ok ? "bg-success-soft text-success" : "bg-soft text-navy"}`}>
-            <Icon name={ok ? "check" : "shield"} size={36} />
+        <Page className="items-center gap-4 pt-10 text-center">
+          <span aria-hidden className="relative grid size-28 place-items-center animate-bloom">
+            <span className="absolute inset-0 rounded-full ring-1 ring-border dark:ring-glass-border" />
+            <span className="absolute inset-4 rounded-full ring-1 ring-border dark:ring-glass-border" />
+            <span className={cn("grid size-12 place-items-center rounded-full", ok ? "bg-ok/12 text-ok" : "bg-signal-soft text-signal-ink")}>
+              <Icon name={ok ? "check" : "shield"} className="size-6" />
+            </span>
           </span>
-          <h2 className="font-display text-[22px] font-semibold">{ok ? "You're verified" : "We're checking your ID"}</h2>
-          <p className="max-w-[300px] text-[14.5px] leading-relaxed text-muted">
-            {ok ? "You can post requests, post trips, carry jobs and withdraw." : "An admin compares your selfie, ID and matric number, usually within a few hours. You'll get a push and an email."}
+          <h2 className="font-display text-[22px] font-semibold tracking-[-0.015em]">{ok ? "You're verified" : "We're checking your ID"}</h2>
+          <p className="max-w-[300px] text-[14px] leading-relaxed text-pretty text-ink-2">
+            {ok ? "You can post requests, post trips, carry jobs and withdraw." : "An admin compares your selfie, ID and matric number, usually within a few hours. You'll get an alert and an email."}
           </p>
-          {latest.data && <Pill tone={ok ? "success" : "amber"}>{latest.data.matric_number} · sent {ago(latest.data.created_at)}</Pill>}
-          {!ok && <p className="text-[13.5px] text-muted">Meanwhile you can browse trips and requests.</p>}
+          {latest.data && <StatusChip tone={ok ? "ok" : "live"}>{latest.data.matric_number} · sent {ago(latest.data.created_at)}</StatusChip>}
+          {!ok && <p className="text-[13px] text-ink-2">Meanwhile you can browse trips and requests.</p>}
         </Page>
         <Footer><ButtonLink href="/">Go to home</ButtonLink></Footer>
       </div>
@@ -52,6 +55,7 @@ export default function Verify() {
   async function submit(e: React.FormEvent) {
     e.preventDefault();
     setError(null);
+    if (!matric.trim()) return setError("Enter your matric number.");
     if (!selfie[0] || !idPhoto[0]) return setError("Add both a selfie and a photo of your student ID.");
     setBusy(true);
     try {
@@ -68,30 +72,30 @@ export default function Verify() {
   }
 
   return (
-    <form onSubmit={submit} className="flex min-h-dvh flex-col">
+    <form onSubmit={submit} className="flex min-h-dvh flex-col" noValidate>
       <Header title="Verify your student ID" subtitle="Step 2 of 3" back="/" />
       <Page className="gap-4">
-        {latest.data?.status === "rejected" && (
-          <Notice tone="amber">Your last ID wasn&apos;t approved: {latest.data.reject_reason}. Please try again.</Notice>
-        )}
-        <p className="text-[14px] leading-relaxed text-muted">Only verified students can post and carry. Your photos are private: only admins see them, and they&apos;re deleted 30 days after review.</p>
+        {latest.data?.status === "rejected" && <Alert tone="warn" title="Your last ID wasn't approved">{latest.data.reject_reason}. Please try again.</Alert>}
+        <p className="text-[14px] leading-relaxed text-ink-2">Only verified students can post and carry. Your photos are private: only admins see them, and they&apos;re deleted 30 days after review.</p>
         <Field label="Matric number" htmlFor="matric">
-          <Input id="matric" autoCapitalize="characters" value={matric} onChange={(e) => setMatric(e.target.value.toUpperCase())} placeholder="U21CS1234" required />
+          <Input id="matric" autoCapitalize="characters" className="font-mono tracking-wide" value={matric} onChange={(e) => setMatric(e.target.value.toUpperCase())} placeholder="U21CS1234" />
         </Field>
         <Field label="Hostel" htmlFor="hostel">
           <Input id="hostel" value={hostel} onChange={(e) => setHostel(e.target.value)} placeholder="Amina Hall" />
         </Field>
-        <Field label="Selfie" hint="Face the camera in good light, no cap or glasses.">
-          <PhotoPicker files={selfie} onChange={setSelfie} max={1} capture="user" label="Take a selfie" />
-        </Field>
-        <Field label="Student ID card" hint="The whole card, readable, no glare.">
-          <PhotoPicker files={idPhoto} onChange={setIdPhoto} max={1} capture="environment" label="Photo of student ID" />
-        </Field>
-        <ErrorNote>{error}</ErrorNote>
+        <div className="grid grid-cols-2 gap-3">
+          <Field label="Selfie" hint="Good light, no cap.">
+            <PhotoPicker files={selfie} onChange={setSelfie} max={1} capture="user" label="Selfie" />
+          </Field>
+          <Field label="Student ID" hint="Whole card, no glare.">
+            <PhotoPicker files={idPhoto} onChange={setIdPhoto} max={1} capture="environment" label="ID card" />
+          </Field>
+        </div>
+        <Alert tone="critical">{error}</Alert>
       </Page>
       <Footer>
         <Button type="submit" loading={busy}>Submit for review</Button>
-        <Link href="/" className="text-center text-[13.5px] font-semibold text-navy">Do this later</Link>
+        <Link href="/" className="text-center text-[13.5px] font-semibold text-signal-ink">Do this later</Link>
       </Footer>
     </form>
   );

@@ -1,10 +1,10 @@
 // Start a wallet top-up.
 //   POST { method: "transfer" }            → the student's dedicated bank account (created once)
 //   POST { method: "card", amount: 5000 }  → Paystack checkout URL (card, USSD, bank)
-// Money is credited only by paystack-webhook, never here.
+// Money is credited only after Paystack confirms it (paystack-webhook or topup-verify), never here.
 import { AppError, handler, json, readJson, toKobo } from "../_shared/http.ts";
 import { adminClient, requireCaller } from "../_shared/supabase.ts";
-import { paystack } from "../_shared/paystack.ts";
+import { paystack, paystackEmail } from "../_shared/paystack.ts";
 
 type Body = { method?: "transfer" | "card"; amount?: number | string };
 
@@ -24,7 +24,7 @@ Deno.serve(handler(async (req) => {
     const customer = existing?.customer_code
       ? { customer_code: existing.customer_code as string }
       : await paystack<{ customer_code: string }>("POST", "/customer", {
-        email: caller.email,
+        email: paystackEmail(caller.email, caller.id),
         first_name: first,
         last_name: rest.join(" ") || first,
         metadata: { profile_id: caller.id },
@@ -34,7 +34,11 @@ Deno.serve(handler(async (req) => {
       "POST",
       "/dedicated_account",
       { customer: customer.customer_code, preferred_bank: Deno.env.get("PAYSTACK_DVA_BANK") ?? "wema-bank" },
-    );
+    ).catch((e) => {
+      // Paystack enables dedicated accounts per business on request.
+      if (e instanceof AppError && /not available for your business/i.test(e.detail ?? "")) throw new AppError("dva_unavailable", 400);
+      throw e;
+    });
 
     const { data: saved, error } = await admin.rpc("svc_save_paystack_customer", {
       p_profile: caller.id,
@@ -60,7 +64,7 @@ Deno.serve(handler(async (req) => {
     if (error) throw new AppError(error.code === "P0001" ? error.message : "server_error", error.code === "P0001" ? 400 : 500);
 
     const tx = await paystack<{ authorization_url: string; reference: string }>("POST", "/transaction/initialize", {
-      email: caller.email,
+      email: paystackEmail(caller.email, caller.id),
       amount,
       currency: "NGN",
       reference,

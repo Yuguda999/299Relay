@@ -1,0 +1,319 @@
+@import "tailwindcss";
+
+@custom-variant dark (&:where(.dark, .dark *));
+
+/*
+ * Relay skin, built on the Vxrcel/Raven token vocabulary (references/new-skin.md).
+ *   Relay (:root)       - light-first, cool paper, round, flat. Navy ink, orange signal.
+ *   Relay Night (.dark) - deep navy, flat solids, same orange signal.
+ * Components only reference roles; colour values live here and nowhere else.
+ * Exception: --plate is the brand navy plate (splash, logo ground), dark in both themes on purpose.
+ */
+
+@theme inline {
+	--color-background: var(--background);
+	--color-foreground: var(--foreground);
+	--font-sans: var(--font-geist-sans), ui-sans-serif, system-ui, sans-serif;
+	--font-mono: var(--font-geist-mono), ui-monospace, monospace;
+	--font-display: var(--font-montserrat), var(--font-geist-sans), ui-sans-serif, sans-serif;
+
+	--color-ring: var(--ring);
+	--color-input: var(--input);
+	--color-border: var(--border);
+	--color-primary: var(--primary);
+	--color-primary-foreground: var(--primary-foreground);
+	--color-popover: var(--popover);
+	--color-popover-foreground: var(--popover-foreground);
+	--color-card: var(--card);
+	--color-card-foreground: var(--foreground);
+	--color-muted: var(--muted);
+	--color-muted-foreground: var(--ink-2);
+	--color-destructive: var(--critical);
+
+	--color-band: var(--band);
+	--color-sheet: var(--sheet);
+	--color-card-nested: var(--card-nested);
+	--color-ink: var(--foreground);
+	--color-ink-2: var(--ink-2);
+	--color-ink-3: var(--ink-3);
+	--color-signal: var(--signal);
+	--color-signal-ink: var(--signal-ink);
+	--color-signal-soft: var(--signal-soft);
+	--color-inverse: var(--inverse);
+	--color-inverse-foreground: var(--inverse-foreground);
+	--color-glass: var(--glass);
+	--color-glass-border: var(--glass-border);
+	--color-scrim: var(--scrim);
+	--color-critical: var(--critical);
+	--color-warn: var(--warn);
+	--color-ok: var(--ok);
+	--color-plate: var(--plate);
+	--color-plate-ink: var(--plate-ink);
+	--color-plate-ink-2: var(--plate-ink-2);
+
+	--radius-card: var(--radius-card-size);
+	--radius-frame: var(--radius-frame-size);
+	--radius-pill: 9999px;
+
+	--shadow-card: var(--shadow-card-value);
+	--shadow-lift: var(--shadow-lift-value);
+	--shadow-pop: var(--shadow-pop-value);
+	--shadow-glow: var(--shadow-glow-value);
+}
+
+@theme {
+	--text-hero: 2.25rem;
+	--text-hero--line-height: 1.06;
+	--text-hero--letter-spacing: -0.03em;
+	--text-kpi: 2.5rem;
+	--text-kpi--line-height: 1;
+	--text-kpi--letter-spacing: -0.03em;
+	--text-kpi-sm: 1.625rem;
+	--text-kpi-sm--line-height: 1.05;
+	--text-kpi-sm--letter-spacing: -0.02em;
+	--text-micro: 0.6875rem;
+	--text-micro--line-height: 1.2;
+
+	--ease-out-quint: cubic-bezier(0.22, 1, 0.36, 1);
+
+	--animate-rise-in: rise-in 320ms var(--ease-out-quint) backwards;
+	--animate-pop-in: pop-in 140ms var(--ease-out-quint) both;
+	--animate-bloom: bloom 700ms var(--ease-out-quint) both;
+	--animate-pulse-once: pulse-once 900ms var(--ease-out-quint) 1 both;
+	--animate-shimmer: shimmer 1.4s linear infinite;
+
+	@keyframes rise-in {
+		from { opacity: 0; transform: translateY(8px); }
+		to { opacity: 1; transform: none; }
+	}
+	@keyframes pop-in {
+		from { opacity: 0; transform: scale(0.95); }
+		to { opacity: 1; transform: none; }
+	}
+	@keyframes bloom {
+		from { opacity: 0; transform: scale(0.6); }
+		60% { opacity: 1; transform: scale(1.03); }
+		to { opacity: 1; transform: scale(1); }
+	}
+	@keyframes pulse-once {
+		from { opacity: 0.7; transform: scale(1); }
+		to { opacity: 0; transform: scale(2.8); }
+	}
+	@keyframes shimmer {
+		from { background-position: 200% 0; }
+		to { background-position: -200% 0; }
+	}
+}
+
+/* ─── Relay (light) ─── */
+:root {
+	--radius-card-size: 24px;
+	--radius-frame-size: 32px;
+
+	--band: #f2f4f8;            /* page */
+	--sheet: #ffffff;           /* pane */
+	--card: #f6f8fb;            /* row, tile */
+	--card-nested: #ffffff;     /* tile in a tile */
+	--muted: #eceff4;
+	--foreground: #0b1f44;      /* navy ink: 16.2:1 on sheet */
+	--ink-2: #4b5568;           /* 7.5:1 on sheet */
+	--ink-3: #7d8697;           /* 3.7:1 on sheet, meta only */
+
+	/* orange: fills, marks, big numerals. Text uses --signal-ink (5.4:1). */
+	--signal: #ff7a00;
+	--signal-ink: #b54708;
+	--signal-soft: #fff0e2;
+	--inverse: #0b1f44;
+	--inverse-foreground: #ffffff;
+	/* navy labels on orange: 6.2:1 */
+	--primary: #ff7a00;
+	--primary-foreground: #0b1f44;
+	--popover: #ffffff;
+	--popover-foreground: #0b1f44;
+	--border: #e3e7ee;
+	--input: #d5dbe5;
+	--ring: #c45200;            /* 4.6:1 on sheet */
+	--glass: rgb(255 255 255 / 0.86);
+	--glass-border: rgb(11 31 68 / 0.08);
+	--scrim: rgb(11 31 68 / 0.32);
+	--critical: #b42318;
+	--warn: #975a00;
+	--ok: #1a7347;
+	--plate: #0b1f44;
+	--plate-ink: #ffffff;
+	--plate-ink-2: #c9d3e6;     /* 10.8:1 on plate */
+	--em-scroll: #cdd3dd;
+
+	--shadow-card-value: none;
+	--shadow-lift-value: 0 14px 34px -16px rgb(11 31 68 / 0.22);
+	--shadow-pop-value: 0 18px 40px -18px rgb(11 31 68 / 0.35), 0 0 0 1px rgb(11 31 68 / 0.06);
+	--shadow-glow-value: 0 0 0 1px rgb(255 122 0 / 0.3), 0 10px 30px -10px rgb(255 122 0 / 0.55);
+
+	--background: var(--band);
+	color-scheme: light;
+}
+
+/* ─── Relay Night (dark) ─── */
+.dark {
+	--band: #060c1a;
+	--sheet: #0b1426;
+	--card: #111c33;
+	--card-nested: #16233e;
+	--muted: #16233e;
+	--foreground: #eaf0fa;      /* 14.8:1 on card */
+	--ink-2: #a3afc4;           /* 7.7:1 on card */
+	--ink-3: #6e7b94;           /* 4.0:1 on card */
+
+	--signal: #ff8a1f;
+	--signal-ink: #ff8a1f;      /* 7.2:1 on card */
+	--signal-soft: rgb(255 138 31 / 0.14);
+	--inverse: #eaf0fa;
+	--inverse-foreground: #0b1f44;
+	--primary: #ff8a1f;
+	--primary-foreground: #0b1426; /* 7.8:1 */
+	--popover: #111c33;
+	--popover-foreground: #eaf0fa;
+	--border: rgb(170 190 230 / 0.1);
+	--input: rgb(170 190 230 / 0.18);
+	--ring: #ffa24d;
+	--glass: rgb(11 20 38 / 0.82);
+	--glass-border: rgb(170 190 230 / 0.14);
+	--scrim: rgb(2 6 14 / 0.62);
+	--critical: #ff7a6e;
+	--warn: #f2b35b;
+	--ok: #4fd19a;
+	--em-scroll: #24314d;
+
+	--shadow-card-value: inset 0 1px 0 rgb(255 255 255 / 0.04);
+	--shadow-lift-value: inset 0 1px 0 rgb(255 255 255 / 0.06), 0 26px 50px -24px rgb(0 0 0 / 0.85);
+	--shadow-pop-value: inset 0 1px 0 rgb(255 255 255 / 0.06), 0 24px 60px -24px rgb(0 0 0 / 0.9), 0 0 0 1px rgb(170 190 230 / 0.12);
+	--shadow-glow-value: 0 0 0 1px rgb(255 138 31 / 0.5), 0 0 30px -6px rgb(255 138 31 / 0.45);
+
+	color-scheme: dark;
+}
+
+/* Reduced transparency: glass becomes solid. */
+@media (prefers-reduced-transparency: reduce) {
+	:root:not(.dark) { --glass: #ffffff; }
+	.dark { --glass: #0b1426; }
+}
+html[data-transparency="reduce"]:not(.dark) { --glass: #ffffff; }
+html[data-transparency="reduce"].dark { --glass: #0b1426; }
+
+@layer base {
+	* {
+		@apply border-border;
+		scrollbar-width: thin;
+		scrollbar-color: var(--em-scroll) transparent;
+	}
+	html {
+		@apply font-sans;
+		font-feature-settings: "cv11", "ss01";
+		-webkit-tap-highlight-color: transparent;
+	}
+	body {
+		@apply bg-background text-foreground;
+	}
+	::selection { background: color-mix(in oklab, var(--signal) 30%, transparent); }
+	:focus-visible { outline-offset: 2px; }
+	input, textarea, button { font: inherit; }
+}
+
+@utility font-display { font-family: var(--font-display); }
+
+/* Mono uppercase microtype: section labels, metadata keys, counts. */
+@utility readout {
+	font-family: var(--font-mono);
+	font-size: 0.6875rem;
+	letter-spacing: 0.06em;
+	text-transform: uppercase;
+	color: var(--ink-2);
+}
+
+@utility tabular {
+	font-variant-numeric: tabular-nums;
+	font-feature-settings: "tnum";
+}
+
+/* Bento card: flat paper in light, hairline + sheen in dark. */
+@utility bento {
+	border-radius: var(--radius-card);
+	background: var(--card);
+	color: var(--foreground);
+	box-shadow: var(--shadow-card);
+	border: 1px solid transparent;
+	.dark & {
+		border-color: var(--border);
+		background-image: linear-gradient(160deg, rgb(255 255 255 / 0.03), transparent 42%);
+	}
+}
+
+/* Hero slab: navy on paper; on Night a lifted card with a signal hairline (no bright slab). */
+@utility hero {
+	background: var(--inverse);
+	color: var(--inverse-foreground);
+	.dark & {
+		background: var(--card-nested);
+		color: var(--foreground);
+		box-shadow: 0 0 0 1px color-mix(in oklab, var(--signal) 35%, transparent), var(--shadow-card);
+	}
+}
+
+@utility lift {
+	transition: transform 180ms var(--ease-out-quint), box-shadow 180ms var(--ease-out-quint), background-color 180ms;
+	@media (hover: hover) and (pointer: fine) {
+		&:hover { transform: translateY(-2px); box-shadow: var(--shadow-lift); }
+	}
+	&:active { transform: scale(0.985); }
+}
+
+@utility glass {
+	background: var(--glass);
+	border: 1px solid var(--glass-border);
+	backdrop-filter: blur(20px) saturate(125%);
+}
+
+/* Staggered entrance: style={{ "--i": index }}. */
+@utility entrance {
+	animation: rise-in 320ms var(--ease-out-quint) backwards;
+	animation-delay: calc(var(--i, 0) * 55ms + 60ms);
+}
+
+@utility skeleton {
+	border-radius: 9999px;
+	background: linear-gradient(90deg, var(--muted) 25%, var(--card-nested) 50%, var(--muted) 75%);
+	background-size: 200% 100%;
+	animation: var(--animate-shimmer);
+}
+
+/* Theme reveal (View Transitions) grown from the toggle. */
+::view-transition-old(root),
+::view-transition-new(root) {
+	animation: none;
+	mix-blend-mode: normal;
+}
+::view-transition-new(root) {
+	animation: skin-reveal 600ms var(--ease-out-quint);
+}
+@keyframes skin-reveal {
+	from { clip-path: circle(0 at var(--reveal-x, 50%) var(--reveal-y, 50%)); }
+	to { clip-path: circle(var(--reveal-r, 150vmax) at var(--reveal-x, 50%) var(--reveal-y, 50%)); }
+}
+
+/* Reduced motion, layer 1: CSS backstop (OS setting and in-app setting). */
+@media (prefers-reduced-motion: reduce) {
+	*, *::before, *::after {
+		animation-duration: 1ms !important;
+		animation-iteration-count: 1 !important;
+		transition-duration: 1ms !important;
+		transition-delay: 0ms !important;
+		scroll-behavior: auto !important;
+	}
+}
+html[data-motion="reduce"] :is(*, *::before, *::after) {
+	animation-duration: 1ms !important;
+	animation-iteration-count: 1 !important;
+	transition-duration: 1ms !important;
+	transition-delay: 0ms !important;
+	scroll-behavior: auto !important;
+}

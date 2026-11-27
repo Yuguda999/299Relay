@@ -155,6 +155,46 @@ export type Database = {
         };
         Relationships: [];
       };
+      chat_presence: {
+        Row: {
+          job_id: string;
+          profile_id: string;
+          seen_at: string;
+        };
+        Insert: {
+          job_id: string;
+          profile_id: string;
+          seen_at?: string;
+        };
+        Update: {
+          job_id?: string;
+          profile_id?: string;
+          seen_at?: string;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "chat_presence_job_id_fkey";
+            columns: ["job_id"];
+            isOneToOne: false;
+            referencedRelation: "jobs";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "chat_presence_profile_id_fkey";
+            columns: ["profile_id"];
+            isOneToOne: false;
+            referencedRelation: "profiles";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "chat_presence_profile_id_fkey";
+            columns: ["profile_id"];
+            isOneToOne: false;
+            referencedRelation: "public_profiles";
+            referencedColumns: ["id"];
+          },
+        ];
+      };
       devices: {
         Row: {
           id: string;
@@ -1069,6 +1109,44 @@ export type Database = {
           },
         ];
       };
+      request_files: {
+        Row: {
+          created_at: string;
+          id: string;
+          name: string;
+          pages: number | null;
+          path: string;
+          request_id: string;
+          size_bytes: number | null;
+        };
+        Insert: {
+          created_at?: string;
+          id?: string;
+          name: string;
+          pages?: number | null;
+          path: string;
+          request_id: string;
+          size_bytes?: number | null;
+        };
+        Update: {
+          created_at?: string;
+          id?: string;
+          name?: string;
+          pages?: number | null;
+          path?: string;
+          request_id?: string;
+          size_bytes?: number | null;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "request_files_request_id_fkey";
+            columns: ["request_id"];
+            isOneToOne: false;
+            referencedRelation: "requests";
+            referencedColumns: ["id"];
+          },
+        ];
+      };
       requests: {
         Row: {
           campus_id: string;
@@ -1082,6 +1160,7 @@ export type Database = {
           item_budget: number;
           items_text: string;
           photo_path: string | null;
+          print_options: Json | null;
           requester_id: string;
           status: Database["public"]["Enums"]["request_status"];
           target_trip_id: string | null;
@@ -1101,6 +1180,7 @@ export type Database = {
           item_budget?: number;
           items_text: string;
           photo_path?: string | null;
+          print_options?: Json | null;
           requester_id: string;
           status?: Database["public"]["Enums"]["request_status"];
           target_trip_id?: string | null;
@@ -1120,6 +1200,7 @@ export type Database = {
           item_budget?: number;
           items_text?: string;
           photo_path?: string | null;
+          print_options?: Json | null;
           requester_id?: string;
           status?: Database["public"]["Enums"]["request_status"];
           target_trip_id?: string | null;
@@ -1464,6 +1545,8 @@ export type Database = {
           isSetofReturn: false;
         };
       };
+      admin_ledger_health: { Args: Record<PropertyKey, never>; Returns: Json };
+      admin_metrics: { Args: { p_days?: number }; Returns: Json };
       admin_review_request: {
         Args: { p_approve: boolean; p_note?: string; p_request: string };
         Returns: {
@@ -1478,6 +1561,7 @@ export type Database = {
           item_budget: number;
           items_text: string;
           photo_path: string | null;
+          print_options: Json | null;
           requester_id: string;
           status: Database["public"]["Enums"]["request_status"];
           target_trip_id: string | null;
@@ -1523,6 +1607,27 @@ export type Database = {
           isSetofReturn: false;
         };
       };
+      admin_update_campus: {
+        Args: { p_curfew: string; p_item_cap_new: number; p_item_cap_trusted: number };
+        Returns: {
+          active: boolean;
+          created_at: string;
+          handoff_curfew: string;
+          id: string;
+          item_cap_new: number;
+          item_cap_trusted: number;
+          name: string;
+          short_name: string;
+          timezone: string;
+          updated_at: string;
+        };
+        SetofOptions: {
+          from: "*";
+          to: "campuses";
+          isOneToOne: true;
+          isSetofReturn: false;
+        };
+      };
       cancel_request: {
         Args: { p_request: string };
         Returns: {
@@ -1537,6 +1642,7 @@ export type Database = {
           item_budget: number;
           items_text: string;
           photo_path: string | null;
+          print_options: Json | null;
           requester_id: string;
           status: Database["public"]["Enums"]["request_status"];
           target_trip_id: string | null;
@@ -1576,6 +1682,7 @@ export type Database = {
           isSetofReturn: false;
         };
       };
+      chat_heartbeat: { Args: { p_job: string; p_leaving?: boolean }; Returns: undefined };
       confirm_purchase: {
         Args: { p_job: string; p_receipt_amount: number; p_receipt_path: string };
         Returns: {
@@ -1605,11 +1712,13 @@ export type Database = {
         Args: {
           p_deadline: string;
           p_fee?: number;
+          p_files?: Json;
           p_from_place: string;
           p_handoff_place: string;
           p_item_budget?: number;
           p_items_text: string;
           p_photo_path?: string;
+          p_print_options?: Json;
           p_trip?: string;
           p_type: Database["public"]["Enums"]["request_type"];
           p_urgent?: boolean;
@@ -1626,6 +1735,7 @@ export type Database = {
           item_budget: number;
           items_text: string;
           photo_path: string | null;
+          print_options: Json | null;
           requester_id: string;
           status: Database["public"]["Enums"]["request_status"];
           target_trip_id: string | null;
@@ -1774,6 +1884,7 @@ export type Database = {
           item_budget: number;
           items_text: string;
           photo_path: string | null;
+          print_options: Json | null;
           requester_id: string;
           status: Database["public"]["Enums"]["request_status"];
           target_trip_id: string | null;
@@ -1971,6 +2082,16 @@ export type Database = {
         };
       };
       svc_fail_payment: { Args: { p_raw: Json; p_reference: string }; Returns: undefined };
+      svc_flag_stuck_payout: { Args: { p_payout: string }; Returns: boolean };
+      svc_mark_photos_deleted: { Args: { p_ids: string[] }; Returns: number };
+      svc_photos_due_for_deletion: {
+        Args: { p_limit?: number };
+        Returns: {
+          id: string;
+          id_photo_path: string;
+          selfie_path: string;
+        }[];
+      };
       svc_profile_for_customer: { Args: { p_customer_code: string }; Returns: string };
       svc_save_bank_account: {
         Args: {
@@ -2049,6 +2170,27 @@ export type Database = {
           isSetofReturn: false;
         };
       };
+      svc_stuck_payouts: {
+        Args: { p_limit?: number };
+        Returns: {
+          amount: number;
+          bank_account_id: string;
+          created_at: string;
+          failure_reason: string | null;
+          id: string;
+          paystack_reference: string;
+          paystack_transfer: string | null;
+          profile_id: string;
+          status: Database["public"]["Enums"]["payout_status"];
+          updated_at: string;
+        }[];
+        SetofOptions: {
+          from: "*";
+          to: "payouts";
+          isOneToOne: false;
+          isSetofReturn: true;
+        };
+      };
       unregister_device: { Args: { p_token: string }; Returns: undefined };
     };
     Enums: {
@@ -2075,7 +2217,7 @@ export type Database = {
       place_kind: "market" | "gate" | "hostel" | "faculty" | "office" | "other";
       profile_status: "pending" | "verified" | "suspended";
       request_status: "review" | "posted" | "accepted" | "completed" | "cancelled" | "expired";
-      request_type: "buy" | "pick_up" | "drop_off";
+      request_type: "buy" | "pick_up" | "drop_off" | "print";
       substitute_decision: "pending" | "approved" | "declined";
       trip_status: "live" | "full" | "done" | "cancelled";
       user_role: "student" | "admin";
@@ -2223,7 +2365,7 @@ export const Constants = {
       place_kind: ["market", "gate", "hostel", "faculty", "office", "other"],
       profile_status: ["pending", "verified", "suspended"],
       request_status: ["review", "posted", "accepted", "completed", "cancelled", "expired"],
-      request_type: ["buy", "pick_up", "drop_off"],
+      request_type: ["buy", "pick_up", "drop_off", "print"],
       substitute_decision: ["pending", "approved", "declined"],
       trip_status: ["live", "full", "done", "cancelled"],
       user_role: ["student", "admin"],

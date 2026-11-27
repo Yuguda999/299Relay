@@ -12,7 +12,17 @@ Deno.serve(handler(async (req) => {
   if (req.method === "GET") {
     await requireCaller(req);
     const banks = await paystack<Bank[]>("GET", "/bank?country=nigeria&perPage=200");
-    return json({ banks: banks.filter((b) => b.active).map(({ name, code }) => ({ name, code })) });
+    // Paystack lists some codes twice (renames, or two banks sharing a code). Transfers
+    // go by code, so show one option per code with every distinct name on it.
+    const byCode = new Map<string, string[]>();
+    for (const b of banks.filter((x) => x.active)) {
+      const names = byCode.get(b.code) ?? [];
+      if (!names.includes(b.name)) names.push(b.name);
+      byCode.set(b.code, names);
+    }
+    const list = [...byCode].map(([code, names]) => ({ code, name: names.join(" / ") }))
+      .sort((a, b) => a.name.localeCompare(b.name));
+    return json({ banks: list });
   }
   if (req.method !== "POST") throw new AppError("method_not_allowed", 405);
 

@@ -2,13 +2,14 @@
 
 import { useRouter } from "next/navigation";
 import { useState } from "react";
-import { Button, ErrorNote, Field, Footer, Header, Input, Page } from "@/components/ui";
+import { Alert, Button, Field, Footer, Header, Input, Page, useNotify } from "@/components/ui";
 import { errorMessage } from "@/lib/errors";
 import { supabase } from "@/lib/supabase/client";
 
 /** Reached from the reset email (session set by /auth/callback). */
 export default function ResetPassword() {
   const router = useRouter();
+  const { toast } = useNotify();
   const [password, setPassword] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
@@ -22,17 +23,18 @@ export default function ResetPassword() {
     if (!error) await db.auth.signOut({ scope: "others" }); // sign out every other session
     setBusy(false);
     if (error) return setError(errorMessage(error));
+    toast({ title: "Password changed", body: "Other devices have been signed out." });
     router.replace("/");
   }
 
   return (
-    <form onSubmit={submit} className="flex min-h-dvh flex-col">
+    <form onSubmit={submit} className="flex min-h-dvh flex-col" noValidate>
       <Header title="Choose a new password" back={false} />
-      <Page>
+      <Page className="gap-4">
         <Field label="New password" htmlFor="pw" hint="At least 8 characters">
-          <Input id="pw" type="password" autoComplete="new-password" value={password} onChange={(e) => setPassword(e.target.value)} required minLength={8} />
+          <Input id="pw" type="password" autoComplete="new-password" value={password} onChange={(e) => setPassword(e.target.value)} />
         </Field>
-        <ErrorNote>{error}</ErrorNote>
+        <Alert tone="critical">{error}</Alert>
       </Page>
       <Footer><Button type="submit" loading={busy}>Save password</Button></Footer>
     </form>

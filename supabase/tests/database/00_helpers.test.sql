@@ -55,6 +55,33 @@ create or replace function tests.get(k text) returns text
 language sql stable as $$ select current_setting('tests.' || k, true); $$;
 grant execute on function tests.put(text, text), tests.get(text) to anon, authenticated;
 
+-- Balances are asserted relative to a snapshot taken at the start of each test
+-- file, so tests pass on a database that has been used by hand, not only on fresh seed data.
+create or replace function tests.snap() returns void
+language plpgsql security definer set search_path = '' as $$
+begin
+  -- Fund the test students first (rolled back with the test), so tests don't depend
+  -- on balances left over from manual testing.
+  perform public.svc_confirm_payment('test_fund_' || gen_random_uuid(), u.id, 2000000, 'test', '{}'::jsonb)
+    from auth.users u where u.email in ('aisha@relay.test', 'tunde@relay.test');
+  perform set_config('tests.base_aisha_available', (select available from public.wallets w join auth.users u on u.id = w.profile_id where u.email = 'aisha@relay.test')::text, true);
+  perform set_config('tests.base_aisha_held',      (select held      from public.wallets w join auth.users u on u.id = w.profile_id where u.email = 'aisha@relay.test')::text, true);
+  perform set_config('tests.base_tunde_available', (select available from public.wallets w join auth.users u on u.id = w.profile_id where u.email = 'tunde@relay.test')::text, true);
+  perform set_config('tests.base_tunde_held',      (select held      from public.wallets w join auth.users u on u.id = w.profile_id where u.email = 'tunde@relay.test')::text, true);
+  perform set_config('tests.base_platform', (select balance from public.ledger_accounts where kind = 'platform_revenue')::text, true);
+end $$;
+grant execute on function tests.snap() to anon, authenticated;
+
+create or replace function tests.base(k text) returns bigint
+language sql stable as $$ select current_setting('tests.base_' || k)::bigint; $$;
+grant execute on function tests.base(text) to anon, authenticated;
+
+create or replace function tests.campus_profile_count() returns bigint
+language sql stable security definer set search_path = '' as $$
+  select count(*) from public.profiles where campus_id = '00000000-0000-4000-a000-000000000001';
+$$;
+grant execute on function tests.campus_profile_count() to anon, authenticated;
+
 select plan(1);
 select has_function('tests', 'act_as', array['text'], 'test helpers installed');
 select * from finish();

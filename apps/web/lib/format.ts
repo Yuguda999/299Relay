@@ -15,7 +15,7 @@ export function toKobo(input: string): number | null {
 
 export function time(iso: string | null | undefined): string {
   if (!iso) return "";
-  return new Date(iso).toLocaleTimeString("en-NG", { hour: "numeric", minute: "2-digit", timeZone: TZ }).replace(" ", "").toLowerCase();
+  return new Date(iso).toLocaleTimeString("en-NG", { hour: "numeric", minute: "2-digit", hour12: true, timeZone: TZ }).replace(" ", "").toLowerCase();
 }
 
 export function dayTime(iso: string | null | undefined): string {
@@ -50,7 +50,10 @@ export function initials(name: string | null | undefined): string {
   return (name ?? "?").split(/\s+/).filter(Boolean).slice(0, 2).map((p) => p[0]!.toUpperCase()).join("");
 }
 
-export const TYPE_LABEL = { buy: "Buy", pick_up: "Pick up", drop_off: "Drop off" } as const;
+export const TYPE_LABEL = { buy: "Buy", pick_up: "Pick up", drop_off: "Drop off", print: "Print" } as const;
+
+/** Job types where the traveler pays at a shop with a purchase advance and uploads a receipt. */
+export const isPurchase = (t: string) => t === "buy" || t === "print";
 
 export const JOB_STATUS_LABEL: Record<string, string> = {
   accepted: "Accepted",
@@ -83,3 +86,8 @@ export const LEDGER_REASON: Record<string, string> = {
   payout: "Withdrawal to bank",
   payout_reversed: "Withdrawal returned",
 };
+
+/** What the traveler keeps: fee minus 15% commission rounded down to whole naira (mirrors private.commission). */
+export function earn(fee: number): number {
+  return fee - Math.floor((fee * 0.15) / 100) * 100;
+}

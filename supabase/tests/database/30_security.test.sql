@@ -17,7 +17,7 @@ select throws_ok($$select private.transfer(gen_random_uuid(), gen_random_uuid(),
 
 select is((select count(*) from public.wallets), 1::bigint, 'sees only own wallet');
 select is((select count(*) from public.profiles), 1::bigint, 'sees only own full profile');
-select is((select count(*) from public.public_profiles), 4::bigint, 'sees campus public cards');
+select is((select count(*) from public.public_profiles), tests.campus_profile_count(), 'sees every campus public card');
 select is((select count(*) from public.verifications where profile_id <> auth.uid()), 0::bigint, 'cannot see others'' ID checks');
 
 select throws_ok($$insert into public.messages (job_id, sender_id, kind, body)
