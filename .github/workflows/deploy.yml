@@ -1,0 +1,65 @@
+# Deploys both Next.js apps to Vercel with the Vercel CLI.
+# The Vercel account is linked to a different GitHub user than the repo owner,
+# so Vercel's Git integration can't see this repo; this workflow replaces it.
+#
+#   push to main / mvp-foundation  → production (relay299-web.vercel.app, relay299-admin.vercel.app)
+#   pull request                   → preview URLs in the job summary
+#
+# Needs one repo secret: VERCEL_TOKEN (vercel.com/account/tokens, scoped to the relay team).
+name: Deploy
+
+on:
+  push:
+    branches: [main, mvp-foundation]
+    paths: ["apps/**", ".github/workflows/deploy.yml"]
+  pull_request:
+    paths: ["apps/**", ".github/workflows/deploy.yml"]
+  workflow_dispatch:
+
+concurrency:
+  group: deploy-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+env:
+  VERCEL_ORG_ID: team_gVhO85Lk1ZG2Uf2PjppKnE4h
+
+jobs:
+  deploy:
+    name: ${{ matrix.app }}
+    runs-on: ubuntu-latest
+    # Fork PRs don't get secrets; skip instead of failing.
+    if: github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - app: web
+            project: prj_XqM8zX5IzhLecctcEBSNkYUH4OfJ
+          - app: admin
+            project: prj_Mu1Senz3TxCGAnpZTDPg9E5AIid2
+    defaults:
+      run:
+        working-directory: apps/${{ matrix.app }}
+    env:
+      VERCEL_PROJECT_ID: ${{ matrix.project }}
+      VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: Deploy
+        run: |
+          if [ -z "$VERCEL_TOKEN" ]; then echo "::error::Set the VERCEL_TOKEN repo secret"; exit 1; fi
+          args=(--yes --token "$VERCEL_TOKEN")
+          if [ "$GITHUB_EVENT_NAME" != "pull_request" ]; then args+=(--prod); fi
+          # Builds run on Vercel with the project's env vars (same as a CLI deploy).
+          out=$(npx -y vercel@67.0.0 deploy "${args[@]}" --format json)
+          url=$(jq -r '.deployment.url' <<<"$out")
+          echo "### ${{ matrix.app }}: $url" >> "$GITHUB_STEP_SUMMARY"
+          echo "Deployed $url"
