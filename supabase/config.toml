@@ -426,3 +426,11 @@ enabled = true
 # Paystack cannot send a Supabase JWT; the function checks its HMAC signature instead.
 [functions.paystack-webhook]
 verify_jwt = false
+
+# ─── Production (supabase config push) ─────────────────────────────────────
+[remotes.production]
+project_id = "ztkhxfycnnvztmyrnzww"
+
+[remotes.production.auth]
+site_url = "https://relay299-web.vercel.app"
+additional_redirect_urls = ["https://relay299-web.vercel.app/**", "https://relay299-admin.vercel.app/**"]
