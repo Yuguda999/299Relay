@@ -434,3 +434,17 @@ project_id = "ztkhxfycnnvztmyrnzww"
 [remotes.production.auth]
 site_url = "https://relay299-web.vercel.app"
 additional_redirect_urls = ["https://relay299-web.vercel.app/**", "https://relay299-admin.vercel.app/**"]
+
+# Resend SMTP (key in RESEND_API_KEY, kept outside the repo). Needed for the
+# 6-digit code templates on the free tier.
+[remotes.production.auth.email.smtp]
+enabled = true
+host = "smtp.resend.com"
+port = 465
+user = "resend"
+pass = "env(RESEND_API_KEY)"
+admin_email = "no-reply@linkedu.africa"
+sender_name = "299 RELAY"
+
+[remotes.production.auth.rate_limit]
+email_sent = 100
