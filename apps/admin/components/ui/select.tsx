@@ -9,6 +9,8 @@ import { Portal, useAnchoredPosition, useDismiss } from "./overlay";
 import { fieldShell } from "./field";
 
 export type Option<T extends string = string> = { value: T; label: string; hint?: string; group?: string; disabled?: boolean };
+/** Extra rows shown under the results when the search text isn't an existing option. */
+export type CreateOption = { key: string; label: (query: string) => string; hint?: string };
 
 /**
  * Custom select (ARIA combobox + listbox). Long lists get a search box.
@@ -16,11 +18,13 @@ export type Option<T extends string = string> = { value: T; label: string; hint?
  */
 export function Select<T extends string = string>({
   id, value, onChange, options, placeholder = "Choose", searchable, searchPlaceholder = "Search", disabled, invalid,
-  "aria-label": ariaLabel, "aria-labelledby": labelledBy, className, renderValue, size = "md",
+  "aria-label": ariaLabel, "aria-labelledby": labelledBy, className, renderValue, size = "md", createOptions, onCreate,
 }: {
   id?: string; value: T | "" | null | undefined; onChange: (v: T) => void; options: Option<T>[]; placeholder?: string;
   searchable?: boolean; searchPlaceholder?: string; disabled?: boolean; invalid?: boolean; "aria-label"?: string;
   "aria-labelledby"?: string; className?: string; renderValue?: (o: Option<T>) => ReactNode; size?: "md" | "sm";
+  /** Let people add a value that isn't listed. onCreate returns the new value, or null if it failed. */
+  createOptions?: CreateOption[]; onCreate?: (query: string, key: string) => Promise<T | null>;
 }) {
   const autoId = useId();
   const triggerId = id ?? autoId;
@@ -37,12 +41,17 @@ export function Select<T extends string = string>({
   const [sheet, setSheet] = useState(false);
   const [sheetTitle, setSheetTitle] = useState("");
   const typeahead = useRef({ text: "", at: 0 });
-  const showSearch = searchable ?? options.length > 8;
+  const showSearch = Boolean(onCreate) || (searchable ?? options.length > 8);
+  const [creating, setCreating] = useState<string | null>(null);
 
   const filtered = useMemo(() => {
     const q = query.trim().toLowerCase();
     return q ? options.filter((o) => o.label.toLowerCase().includes(q) || o.hint?.toLowerCase().includes(q)) : options;
   }, [options, query]);
+  const typed = query.trim().replace(/\s+/g, " ");
+  const creates = onCreate && createOptions && typed.length >= 3 && !options.some((o) => o.label.toLowerCase() === typed.toLowerCase())
+    ? createOptions : [];
+  const count = filtered.length + creates.length;
   const selected = options.find((o) => o.value === value);
   const pos = useAnchoredPosition(trigger, open && !sheet, 320);
 
@@ -64,6 +73,20 @@ export function Select<T extends string = string>({
     if (!o || o.disabled) return;
     onChange(o.value);
     close();
+  }
+  async function create(c: CreateOption | undefined) {
+    if (!c || !onCreate || creating) return;
+    setCreating(c.key);
+    try {
+      const v = await onCreate(typed, c.key);
+      if (v) { onChange(v); close(); }
+    } finally {
+      setCreating(null);
+    }
+  }
+  function chooseAt(i: number) {
+    if (i < filtered.length) choose(filtered[i]);
+    else void create(creates[i - filtered.length]);
   }
   useDismiss(open, [trigger, pop], () => close(false));
 
@@ -106,11 +129,11 @@ export function Select<T extends string = string>({
   }, [active, open]);
 
   function move(delta: number) {
-    if (!filtered.length) return;
+    if (!count) return;
     let i = active;
-    for (let n = 0; n < filtered.length; n++) {
-      i = (i + delta + filtered.length) % filtered.length;
-      if (!filtered[i]!.disabled) break;
+    for (let n = 0; n < count; n++) {
+      i = (i + delta + count) % count;
+      if (!filtered[i]?.disabled) break;
     }
     setActive(i);
   }
@@ -120,9 +143,9 @@ export function Select<T extends string = string>({
       case "ArrowDown": e.preventDefault(); move(1); break;
       case "ArrowUp": e.preventDefault(); move(-1); break;
       case "Home": e.preventDefault(); setActive(0); break;
-      case "End": e.preventDefault(); setActive(filtered.length - 1); break;
-      case "Enter": e.preventDefault(); choose(filtered[active]); break;
-      case " ": if (!showSearch) { e.preventDefault(); choose(filtered[active]); } break;
+      case "End": e.preventDefault(); setActive(count - 1); break;
+      case "Enter": e.preventDefault(); chooseAt(active); break;
+      case " ": if (!showSearch) { e.preventDefault(); chooseAt(active); } break;
       case "Escape": e.preventDefault(); close(); break;
       case "Tab": close(false); break;
       default:
@@ -151,7 +174,7 @@ export function Select<T extends string = string>({
         <div className={cn("relative shrink-0 border-b border-border", big ? "px-4 pb-3" : "p-2")}>
           <Icon name="search" className={cn("pointer-events-none absolute size-4 -translate-y-1/2 text-ink-3", big ? "top-[calc(50%-6px)] left-8" : "top-1/2 left-5")} />
           <input ref={search} type="text" role="searchbox" value={query} placeholder={searchPlaceholder}
-            aria-controls={listId} aria-activedescendant={filtered[active] ? `${listId}-${active}` : undefined}
+            aria-controls={listId} aria-activedescendant={active < count ? `${listId}-${active}` : undefined}
             onChange={(e) => { setQuery(e.target.value); setActive(0); }} onKeyDown={onListKey}
             className={cn("w-full rounded-pill bg-card pr-3 pl-9 text-foreground", big ? "h-12 text-[16px]" : "h-10 text-[14px]", "outline-none placeholder:text-ink-3 focus-visible:ring-2 focus-visible:ring-ring/40")} />
         </div>
@@ -160,7 +183,7 @@ export function Select<T extends string = string>({
         aria-activedescendant={!showSearch && filtered[active] ? `${listId}-${active}` : undefined}
         onKeyDown={showSearch ? undefined : onListKey}
         className={cn("min-h-0 flex-1 overflow-y-auto overscroll-contain outline-none", big ? "px-2 pt-1 pb-[max(16px,env(safe-area-inset-bottom))]" : "p-1.5")}>
-        {filtered.length === 0 && <li className="px-3 py-6 text-center text-[13px] text-ink-2">No matches</li>}
+        {count === 0 && <li className="px-3 py-6 text-center text-[13px] text-ink-2">{onCreate && typed ? "Type at least 3 letters to add it" : "No matches"}</li>}
         {filtered.map((o, i) => {
           const header = o.group && o.group !== filtered[i - 1]?.group ? o.group : null;
           const isSel = o.value === value;
@@ -176,6 +199,26 @@ export function Select<T extends string = string>({
                   {o.hint && <span className="truncate text-[12px] font-normal text-ink-2">{o.hint}</span>}
                 </span>
                 {isSel && <Icon name="check" className="size-4 shrink-0 text-signal-ink" />}
+              </div>
+            </li>
+          );
+        })}
+        {creates.map((c, j) => {
+          const i = filtered.length + j;
+          return (
+            <li key={`create:${c.key}`} role="presentation">
+              {j === 0 && <div className="readout px-3 pt-3 pb-1.5">Not listed?</div>}
+              <div id={`${listId}-${i}`} data-index={i} role="option" aria-selected={false} aria-busy={creating === c.key || undefined}
+                onPointerMove={() => setActive(i)} onClick={() => void create(c)}
+                className={cn("flex cursor-pointer items-center gap-3 rounded-xl px-3 py-2", big ? "min-h-13 text-[15.5px]" : "min-h-11 text-[14.5px]",
+                  i === active && "bg-muted", creating && creating !== c.key && "opacity-45")}>
+                <span className="grid size-7 shrink-0 place-items-center rounded-full bg-signal-soft text-signal-ink">
+                  {creating === c.key ? <span className="size-3.5 animate-spin rounded-full border-2 border-current border-t-transparent" /> : <Icon name="plus" className="size-4" />}
+                </span>
+                <span className="flex min-w-0 flex-1 flex-col">
+                  <span className={big ? "leading-snug" : "truncate"}>{c.label(typed)}</span>
+                  {c.hint && <span className="truncate text-[12px] font-normal text-ink-2">{c.hint}</span>}
+                </span>
               </div>
             </li>
           );
